@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "sfdata-platform"
+version = "0.1.0"
+description = ""
+authors = ["Matthew Pugh <matthew.pugh@socialfinance.org.uk>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+dagster = "^1.3.6"
+dagit = "^1.3.6"
+pytest = "^7.3.1"
+dagster-postgres = "^0.19.6"
+dagster-docker = "^0.19.6"
+pyodbc = "^4.0.39"
+pandas = "^2.0.2"
+postgres = "^4.0"
+dagster-graphql = "^1.3.7"
+dagster-aws = "^0.19.7"
+python-decouple = "^3.8"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

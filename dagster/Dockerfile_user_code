@@ -1,0 +1,28 @@
+FROM python:3.10-slim
+
+# Checkout and install dagster libraries needed to run the gRPC server
+# exposing your repository to dagit and dagster-daemon, and to load the DagsterInstance
+
+RUN apt-get -y update && apt-get install -y python3-dev g++ unixodbc-dev
+
+RUN mkdir -p /opt/dagster/dagster_home
+ENV DAGSTER_HOME=/opt/dagster/dagster_home/
+WORKDIR $DAGSTER_HOME
+COPY poetry.lock .
+COPY pyproject.toml .
+
+RUN pip install --no-input poetry
+RUN poetry export --without-hashes --format=requirements.txt > requirements.txt
+RUN pip install --no-input -r requirements.txt
+
+ADD etl ./etl
+COPY dagster.yaml .
+COPY workspace.yaml .
+# Run dagster gRPC server on port 4000
+
+EXPOSE 4000
+
+# CMD allows this to be overridden from run launchers or executors that want
+# to run other commands against your repository
+CMD ["dagster", "code-server", "start", "--host", "0.0.0.0", "--port", "4000",  "--python-file", "./etl/repository.py"]
+#CMD ["dagster", "api", "grpc", "--host", "0.0.0.0", "--port", "4000", "--package-name", "etl", "--working-directory", "/opt/dagster/app"]
