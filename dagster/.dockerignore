@@ -1,0 +1,7 @@
+.git
+*.md
+.cache
+.env
+.idea
+__pycache__
+.terraform

@@ -31,6 +31,8 @@ services:
       DAGSTER_POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
       DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
       DAGSTER_CURRENT_IMAGE: "user_code_image"
+      CODE_FOLDER: ${CODE_FOLDER}
+      REPO_LOCATION: ${REPO_LOCATION}
     networks:
       - network
 

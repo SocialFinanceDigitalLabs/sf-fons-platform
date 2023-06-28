@@ -14,7 +14,7 @@ run_launcher:
       - DAGSTER_POSTGRES_USER
       - DAGSTER_POSTGRES_PASSWORD
       - DAGSTER_POSTGRES_DB
-    network: docker_example_network
+    network: network
     container_kwargs:
       volumes: # Make docker client accessible to any launched containers as well
         - /var/run/docker.sock:/var/run/docker.sock
@@ -25,7 +25,7 @@ run_storage:
   class: PostgresRunStorage
   config:
     postgres_db:
-      hostname: docker_example_postgresql
+      hostname: postgresql
       username:
         env: DAGSTER_POSTGRES_USER
       password:
@@ -39,7 +39,7 @@ schedule_storage:
   class: PostgresScheduleStorage
   config:
     postgres_db:
-      hostname: docker_example_postgresql
+      hostname: postgresql
       username:
         env: DAGSTER_POSTGRES_USER
       password:
@@ -53,7 +53,7 @@ event_log_storage:
   class: PostgresEventLogStorage
   config:
     postgres_db:
-      hostname: docker_example_postgresql
+      hostname: postgresql
       username:
         env: DAGSTER_POSTGRES_USER
       password:
@@ -61,11 +61,3 @@ event_log_storage:
       db_name:
         env: DAGSTER_POSTGRES_DB
       port: 5432
-
-resources:
-  s3:
-    config:
-      region_name: "eu-west-2"
-      use_ssl: true
-      aws_access_key_id: AWS_ACCESS_KEY
-      aws_secret_access_key: AWS_SECRET_ACCESS_KEY
