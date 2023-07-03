@@ -14,9 +14,6 @@ instructions in the `docker-0compose.yaml` file.
 
 ## How it works
 The current design is spin up several images as follows:
-### Dagit
-### Dagster Daemon
-### User Code Server
 
 ```mermaid
 graph TB;
@@ -37,6 +34,17 @@ A-->E[Dagit Live]
 B-->F[Daemon Live]
 I[Code Server Image]-->J[Code Server Live]
 end
-
-
 ```
+
+
+### Dagit
+This is the web interface for Dagster that allows for viewing and interacting with Dagster objects. More 
+[info here](https://docs.dagster.io/concepts/dagit/dagit)
+### Dagster Daemon
+Determines what needs to be run and when using schedulers, sensors, etc. More 
+[info here](https://docs.dagster.io/deployment/dagster-daemon)
+### User Code Server
+This contains the pipeline code for Dagster to run. This includes sensors, ops, assets, jobs, 
+schedule definitions, etc. More 
+[info here](https://docs.dagster.io/concepts/code-locations/workspace-files#running-your-own-grpc-server)
+
