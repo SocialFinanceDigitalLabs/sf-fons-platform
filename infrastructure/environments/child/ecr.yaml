@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  Environment:
+    Type: String
+    Default: staging
+
+Resources:
+  RepoUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub "ecr-cicd-user-${Environment}"
+      Policies:
+        - PolicyName: "inlineECRAccessPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:BatchGetImage"
+                  - "ecr:CompleteLayerUpload"
+                  - "ecr:GetDownloadUrlForLayer"
+                  - "ecr:GetLifecyclePolicy"
+                  - "ecr:InitiateLayerUpload"
+                  - "ecr:PutImage"
+                  - "ecr:UploadLayerPart"
+                Resource:
+                  - !Sub "${CodeServer.Arn}/*"
+  RepoUserAccessKey:
+    Type: 'AWS::IAM::AccessKey'
+    Properties:
+      UserName:
+        !Ref RepoUser
+  CodeServer:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "dagit-${Environment}"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowPushPull
+            Effect: Allow
+            Principal:
+              AWS:
+                - "arn:aws:iam::123456789012:user/Bob"
+                - "arn:aws:iam::123456789012:user/Alice"
+            Action:
+                - "ecr:BatchCheckLayerAvailability"
+                - "ecr:BatchGetImage"
+                - "ecr:CompleteLayerUpload"
+                - "ecr:GetDownloadUrlForLayer"
+                - "ecr:GetLifecyclePolicy"
+                - "ecr:InitiateLayerUpload"
+                - "ecr:PutImage"
+                - "ecr:UploadLayerPart"
+Outputs:
+
+  AccessKey:
+    Value: !Ref RepoUserAccessKey
+  SecretAccessKey:
+    Value: !GetAtt RepoUserAccessKey.SecretAccessKey
+

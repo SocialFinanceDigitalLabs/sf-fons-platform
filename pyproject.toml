@@ -8,6 +8,7 @@ packages = [{include = "sfdata_platform"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
+sfdata-stream-parser = "^0.4.1"
 
 
 [build-system]

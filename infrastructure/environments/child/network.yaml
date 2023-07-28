@@ -1,0 +1,333 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  # Project-level Parameters
+  ProjectName:
+    Type: String
+    Default: Dagster
+    Description: Name of the platform. Used to name things like database, etc.
+  IsProduction:
+    Type: String
+    Default: false
+    Description: Is this production or not. Production may have different settings (e.g. more locked down areas, etc)
+  # Environment Parameters
+  AWSRegion:
+    Type: String
+    Default: eu-west-2
+    Description: Region to use for the setup
+  Environment:
+    Type: String
+    Description: The name for the environment
+  # EC2 Parameters
+  DagitInstanceType:
+    Type: String
+    Default: t2.micro
+    Description: Enter instance size for the Dagit Web Interface. Default is t2.micro.
+  DaemonInstanceType:
+    Type: String
+    Default: t2.micro
+    Description: Enter instance size fpr tje Dagster Daemon. Default is t2.micro
+  DagitImage:
+    Type: String
+    Description: The name of the dagster ecr image to use for dagit
+  DaemonImage:
+    Type: String
+    Description: The name of the dagster ecr image to use for the daemon
+  # Database Parameters
+  DBStorageSize:
+    Type: Number
+    Default: 2
+    Description: How many GB the db should be allocated for storage
+  DBInstanceClass:
+    Type: String
+    Default: db.t2.micro
+    Description: Type of resources for the database to use
+  DBEngine:
+    Type: String
+    Default: aurora-postgres
+    Description: Type of database to run. Suggested postgres or aurora-postgresql
+  DBStorageType:
+    Type: String
+    Default: gp2
+    Description: Type of storage to run the database on (standard or gp2 are the usual options)
+Resources:
+  # Networking Definition
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Project
+          Value: !Sub ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # --- [Public Network Definition]
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+      #InstanceId: !Ref DagitInstance
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Sub "${AWSRegion}a"
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.50.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIP.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetA
+  DagitSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${ProjectName}-Dagit-Security-Group-${Environment}"
+      GroupDescription: "Enable HTTP access via port 80"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+
+  # --- [Private Network Definition]
+  PrivateNatGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: !Ref VPC
+  PrivateNatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt PrivateNatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnetA
+  PrivateSubnetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+          - Key: Project
+            Value: !Ref ProjectName
+          - Key: Environment
+            Value: !Ref Environment
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Sub "${AWSRegion}a"
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+  DaemonSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${ProjectName}-Daemon-Security-Group-${Environment}"
+      GroupDescription: "Security Group for Dagster Daemon"
+      VpcId: !Ref VPC
+  PrivateSubnetRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateSubnetRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref PrivateNatGateway
+
+  # --- [Database Network Definition]
+  DatabaseSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Sub "${AWSRegion}a"
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.10.0/24
+      MapPublicIpOnLaunch: false
+  DatabaseSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Sub "${AWSRegion}b"
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.30.0/24
+      MapPublicIpOnLaunch: false
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: DatabaseSubnetGroup
+      DBSubnetGroupDescription: A subnet group used for the database
+      SubnetIds:
+        - !Ref DatabaseSubnetA
+        - !Ref DatabaseSubnetB
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${ProjectName}-Database-Security-Group-${Environment}"
+      VpcId: !Ref VPC
+      GroupDescription: "Database Access"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: "0.0.0.0/0"
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # EC2 Definition
+  KeyPair:
+    Type: 'AWS::EC2::KeyPair'
+    Properties:
+      KeyName: DagsterKeyPair
+  DagsterDaemonInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      ImageId: !Ref DaemonImage
+      InstanceType: !Ref DaemonInstanceType
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+        - !Ref DaemonSecurityGroup
+      Tags:
+        - Key: Appplication
+          Value: Dagster Dagit Server
+        - Key: Domain
+          Value: None
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Name
+          Value: Dagster
+        - Key: OS
+          Value: Linux
+  DagitInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      ImageId: !Ref DagitImage
+      InstanceType: !Ref DagitInstanceType
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+        - !Ref DagitSecurityGroup
+      Tags:
+        - Key: Appplication
+          Value: Dagster Dagit Server
+        - Key: Domain
+          Value: None
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Name
+          Value: Dagster
+        - Key: OS
+          Value: Linux
+
+  # Database Definition
+  DagsterDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Sub "${ProjectName}-${Environment}"
+      AllocatedStorage: !Ref DBStorageSize
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: !Ref DBEngine
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      PubliclyAccessible: false
+      VPCSecurityGroups: !GetAtt DatabaseSecurityGroup.GroupId
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+    DeletionPolicy: Snapshot
+  DBPassword:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: DBPassword
+      GenerateSecretString:
+        ExcludeLowercase: false
+        ExcludeNumbers: false
+        ExcludePunctuation: false
+        ExcludeUppercase: false
+        IncludeSpace: false
+        PasswordLength: 20
+        RequireEachIncludedType: true
+        ExcludeCharacters: "\"'@/\\"
+  DBUsername:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: DBUsername
+      GenerateSecretString:
+        ExcludeLowercase: false
+        ExcludeNumbers: true
+        ExcludePunctuation: true
+        ExcludeUppercase: false
+        IncludeSpace: false
+        PasswordLength: 10
+        RequireEachIncludedType: true
+Outputs:
+  WebsiteURL:
+    Description: URL For service
+    Value: !Join
+      - ''
+      - - 'http://'
+        - !GetAtt
+          - DagitInstance
+          - PublicDnsName
