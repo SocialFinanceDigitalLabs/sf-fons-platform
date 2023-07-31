@@ -9,6 +9,11 @@ Parameters:
     Type: String
     Default: false
     Description: Is this production or not. Production may have different settings (e.g. more locked down areas, etc)
+  # Networking Parameters
+  DagitHostPort:
+    Type: String
+    Default: "3000"
+    Description: Port the dagit Instance is hosted
   # Environment Parameters
   AWSRegion:
     Type: String
@@ -17,7 +22,23 @@ Parameters:
   Environment:
     Type: String
     Description: The name for the environment
-  # EC2 Parameters
+  # ECS Parameters
+  DaemonMemory:
+    Type: String
+    Default: "512"
+    Description: Memory to allocate for the Dagster Daemon
+  DagitMemory:
+    Type: String
+    Default: "512"
+    Description: Memory to allocate for the Dagster Dagit Interface
+  DaemonLaunchType:
+    Type: String
+    Default: "FARGATE"
+    Description: Either FARGATE or EC2 type can be used
+  DagitLaunchType:
+    Type: String
+    Default: "FARGATE"
+    Description: Either FARGATE or EC2 type can be used
   DagitInstanceType:
     Type: String
     Default: t2.micro
@@ -32,6 +53,10 @@ Parameters:
   DaemonImage:
     Type: String
     Description: The name of the dagster ecr image to use for the daemon
+  HealthCheckGracePeriodSeconds:
+    Type: String
+    Default: 30
+    Description: ??
   # Database Parameters
   DBStorageSize:
     Type: Number
@@ -140,7 +165,7 @@ Resources:
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
-          ToPort: 3000
+          ToPort: !Ref DagitHostPort
           CidrIp: 0.0.0.0/0
 
   # --- [Private Network Definition]
@@ -228,55 +253,103 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # EC2 Definition
-  KeyPair:
-    Type: 'AWS::EC2::KeyPair'
+  # ECS Definition
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
     Properties:
-      KeyName: DagsterKeyPair
-  DagsterDaemonInstance:
-    Type: 'AWS::EC2::Instance'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+  DagsterCluster:
+    Type: AWS::ECS::Cluster
+  DagsterDaemonTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
     Properties:
-      SubnetId: !Ref PrivateSubnetA
-      ImageId: !Ref DaemonImage
-      InstanceType: !Ref DaemonInstanceType
-      KeyName: !Ref KeyPair
-      SecurityGroupIds:
-        - !Ref DaemonSecurityGroup
-      Tags:
-        - Key: Appplication
-          Value: Dagster Dagit Server
-        - Key: Domain
-          Value: None
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Name
-          Value: Dagster
-        - Key: OS
-          Value: Linux
-  DagitInstance:
-    Type: 'AWS::EC2::Instance'
+      Family: DagsterDaemonTask
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: dagster-daemon
+          Image: dagster/dagster
+          Memory: !Ref DaemonMemory
+          EntryPoint:
+            - "dagster-daemon"
+            - "run"
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          Environment:
+            - Name: DAGSTER_HOME
+              Value: "/opt/dagster"
+            - Name: DAGSTER_POSTGRES_HOST
+              Value: !GetAtt DagsterDatabase.Endpoint.Address
+            - Name: DAGSTER_POSTGRES_USER
+              Value: !Ref DBUsername
+            - Name: DAGSTER_POSTGRES_PASSWORD
+              Value: !Ref DBPassword
+            - Name: DAGSTER_POSTGRES_DB
+              Value: "postgres"
+  DagitTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
     Properties:
-      SubnetId: !Ref PublicSubnetA
-      ImageId: !Ref DagitImage
-      InstanceType: !Ref DagitInstanceType
-      KeyName: !Ref KeyPair
-      SecurityGroupIds:
-        - !Ref DagitSecurityGroup
-      Tags:
-        - Key: Appplication
-          Value: Dagster Dagit Server
-        - Key: Domain
-          Value: None
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Name
-          Value: Dagster
-        - Key: OS
-          Value: Linux
+      Family: DagitTask
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: dagit
+          Image: dagster/dagster
+          Memory: 512
+          EntryPoint:
+            - "dagit"
+            - "-h"
+            - "0.0.0.0"
+            - "-p"
+            - "3000"
+            - "-w"
+            - "workspace.yaml"
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          Environment:
+            - Name: DAGSTER_POSTGRES_HOST
+              Value: !GetAtt DagsterDatabase.Endpoint.Address
+            - Name: DAGSTER_POSTGRES_USER
+              Value: !Ref DBUsername
+            - Name: DAGSTER_POSTGRES_PASSWORD
+              Value: !Ref DBPassword
+            - Name: DAGSTER_POSTGRES_DB
+              Value: "postgres"
+  DagsterDaemonService:
+    Type: AWS::ECS::Service
+    DependsOn: [ DagsterCluster, DagsterDaemonTaskDefinition ]
+    Properties:
+      Cluster: !Ref DagsterCluster
+      DesiredCount: 1
+      LaunchType: !Ref DaemonLaunchType
+      TaskDefinition: !Ref DagsterDaemonTaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref PrivateSubnetA
+          SecurityGroups: !Ref DaemonSecurityGroup
+  DagitService:
+    Type: AWS::ECS::Service
+    DependsOn: [ DagsterCluster, DagitTaskDefinition ]
+    Properties:
+      Cluster: !Ref DagsterCluster
+      DesiredCount: 1
+      LaunchType: !Ref DagitLaunchType
+      TaskDefinition: !Ref DagitTaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref PublicSubnetA
+          SecurityGroups: !Ref DagitSecurityGroup
+
+
+
 
   # Database Definition
   DagsterDatabase:
