@@ -1,7 +1,6 @@
 from dagster import job
 from sync.assets.asset1 import load_fixtures
 from sync.ops.ops1 import ingest_data, merge, clean, validate, egress
-import decouple
 
 @job
 def sync_code():

@@ -19,10 +19,25 @@ Parameters:
     Type: String
     Default: eu-west-2
     Description: Region to use for the setup
+  AWSAccountId:
+    Type: String
+    Description: The Account Id for the AWS Account
   Environment:
     Type: String
     Description: The name for the environment
   # ECS Parameters
+  DaemonImagePath:
+    Type: String
+    Default: ""
+    Description: Docker hub image:Version or ECR URL in format aws_account_id.dkr.ecr.region.amazonaws.com/my-repository:latest
+  DagitImagePath:
+    Type: String
+    Default: ""
+    Description: Docker hub image:Version or ECR URL in format aws_account_id.dkr.ecr.region.amazonaws.com/my-repository:latest
+  UserCode1ImagePath:
+    Type: String
+    Default: ""
+    Description: Docker hub image:Version or ECR URL in format aws_account_id.dkr.ecr.region.amazonaws.com/my-repository:latest
   DaemonMemory:
     Type: String
     Default: "512"
@@ -39,6 +54,10 @@ Parameters:
     Type: String
     Default: "FARGATE"
     Description: Either FARGATE or EC2 type can be used
+  CodeServerLaunchType:
+    Type: String
+    Default: "FARGATE"
+    Description: Either FARGATE or EC2 type can be used
   DagitInstanceType:
     Type: String
     Default: t2.micro
@@ -50,13 +69,18 @@ Parameters:
   DagitImage:
     Type: String
     Description: The name of the dagster ecr image to use for dagit
-  DaemonImage:
-    Type: String
-    Description: The name of the dagster ecr image to use for the daemon
   HealthCheckGracePeriodSeconds:
     Type: String
     Default: 30
     Description: ??
+  CodeServerPipelineFolder:
+    Type: String
+    Default: "pipeline"
+    Description: What folder the repo exists in on the code server
+  CodeServerPipelineRepoLocation:
+    Type: String
+    Default: "repository.py"
+    Description: Location of the repo.py file that controls the repository
   # Database Parameters
   DBStorageSize:
     Type: Number
@@ -74,6 +98,10 @@ Parameters:
     Type: String
     Default: gp2
     Description: Type of storage to run the database on (standard or gp2 are the usual options)
+  DBName:
+    Type: String
+    Default: postgres
+    Description: The name to be used for the database
 Resources:
   # Networking Definition
   VPC:
@@ -275,7 +303,7 @@ Resources:
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
       ContainerDefinitions:
         - Name: dagster-daemon
-          Image: dagster/dagster
+          Image: !Ref DaemonImagePath
           Memory: !Ref DaemonMemory
           EntryPoint:
             - "dagster-daemon"
@@ -293,7 +321,7 @@ Resources:
             - Name: DAGSTER_POSTGRES_PASSWORD
               Value: !Ref DBPassword
             - Name: DAGSTER_POSTGRES_DB
-              Value: "postgres"
+              Value: !Ref DBName
   DagitTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -301,7 +329,7 @@ Resources:
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
       ContainerDefinitions:
         - Name: dagit
-          Image: dagster/dagster
+          Image: !Ref DagitImagePath
           Memory: 512
           EntryPoint:
             - "dagit"
@@ -322,7 +350,33 @@ Resources:
             - Name: DAGSTER_POSTGRES_PASSWORD
               Value: !Ref DBPassword
             - Name: DAGSTER_POSTGRES_DB
-              Value: "postgres"
+              Value: !Ref DBName
+  CodeServerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: CodeServerTask
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: code-server
+          Image: !Ref UserCode1ImagePath
+          Memory: 512
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          Environment:
+            - Name: DAGSTER_POSTGRES_HOST
+              Value: !GetAtt DagsterDatabase.Endpoint.Address
+            - Name: DAGSTER_POSTGRES_USER
+              Value: !Ref DBUsername
+            - Name: DAGSTER_POSTGRES_PASSWORD
+              Value: !Ref DBPassword
+            - Name: DAGSTER_POSTGRES_DB
+              Value: !Ref DBName
+            - Name: CODE_FOLDER
+              Value: !Ref CodeServerPipelineFolder
+            - Name: REPO_LOCATION
+              Value: !Ref CodeServerPipelineRepoLocation
+
   DagsterDaemonService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, DagsterDaemonTaskDefinition ]
@@ -347,7 +401,18 @@ Resources:
         AwsvpcConfiguration:
           Subnets: !Ref PublicSubnetA
           SecurityGroups: !Ref DagitSecurityGroup
-
+  CodeServerService:
+    Type: AWS::ECS::Service
+    DependsOn: [ DagsterCluster, CodeServerTaskDefinition ]
+    Properties:
+      Cluster: !Ref DagsterCluster
+      DesiredCount: 1
+      LaunchType: !Ref CodeServerLaunchType
+      TaskDefinition: !Ref CodeServerTaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets: !Ref PrivateSubnetA
+          SecurityGroups: !Ref DaemonSecurityGroup
 
 
 
@@ -355,7 +420,7 @@ Resources:
   DagsterDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBName: !Sub "${ProjectName}-${Environment}"
+      DBName: !Ref DBName
       AllocatedStorage: !Ref DBStorageSize
       DBInstanceClass: !Ref DBInstanceClass
       Engine: !Ref DBEngine
@@ -395,12 +460,3 @@ Resources:
         IncludeSpace: false
         PasswordLength: 10
         RequireEachIncludedType: true
-Outputs:
-  WebsiteURL:
-    Description: URL For service
-    Value: !Join
-      - ''
-      - - 'http://'
-        - !GetAtt
-          - DagitInstance
-          - PublicDnsName
