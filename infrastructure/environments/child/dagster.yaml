@@ -26,6 +26,30 @@ Parameters:
     Type: String
     Description: The name for the environment
   # ECS Parameters
+  DaemonCpu:
+    Type: String
+    Default: 256
+    Description: CPU to use for Daemon
+  DagitCpu:
+    Type: String
+    Default: 256
+    Description: CPU to use for Dagit
+  CodeServerCpu:
+    Type: String
+    Default: 256
+    Description: CPU to use for Code Server
+  DaemonMemory:
+    Type: String
+    Default: 512
+    Description: Memory to use for Daemon
+  DagitMemory:
+    Type: String
+    Default: 512
+    Description: Memory to use for Dagit
+  CodeServerMemory:
+    Type: String
+    Default: 512
+    Description: CPU to use for the Code Server
   DaemonImagePath:
     Type: String
     Default: ""
@@ -38,14 +62,6 @@ Parameters:
     Type: String
     Default: ""
     Description: Docker hub image:Version or ECR URL in format aws_account_id.dkr.ecr.region.amazonaws.com/my-repository:latest
-  DaemonMemory:
-    Type: String
-    Default: "512"
-    Description: Memory to allocate for the Dagster Daemon
-  DagitMemory:
-    Type: String
-    Default: "512"
-    Description: Memory to allocate for the Dagster Dagit Interface
   DaemonLaunchType:
     Type: String
     Default: "FARGATE"
@@ -58,17 +74,6 @@ Parameters:
     Type: String
     Default: "FARGATE"
     Description: Either FARGATE or EC2 type can be used
-  DagitInstanceType:
-    Type: String
-    Default: t2.micro
-    Description: Enter instance size for the Dagit Web Interface. Default is t2.micro.
-  DaemonInstanceType:
-    Type: String
-    Default: t2.micro
-    Description: Enter instance size fpr tje Dagster Daemon. Default is t2.micro
-  DagitImage:
-    Type: String
-    Description: The name of the dagster ecr image to use for dagit
   HealthCheckGracePeriodSeconds:
     Type: String
     Default: 30
@@ -84,15 +89,15 @@ Parameters:
   # Database Parameters
   DBStorageSize:
     Type: Number
-    Default: 2
+    Default: 20
     Description: How many GB the db should be allocated for storage
   DBInstanceClass:
     Type: String
-    Default: db.t2.micro
-    Description: Type of resources for the database to use
+    Default: db.serverless
+    Description: Type of resources for the database to use. See https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Concepts.DBInstanceClass.html#Concepts.DBInstanceClass.Types.serverless-v2
   DBEngine:
     Type: String
-    Default: aurora-postgres
+    Default: aurora-postgresql
     Description: Type of database to run. Suggested postgres or aurora-postgresql
   DBStorageType:
     Type: String
@@ -102,6 +107,18 @@ Parameters:
     Type: String
     Default: postgres
     Description: The name to be used for the database
+  DBUsername:
+    Type: String
+    Default: postgres
+    Description: Username to use with the database
+  DBMinCapacity:
+    Type: String
+    Default: 0.5
+    Description: Minimum capacity is 0.5
+  DBMaxCapacity:
+    Type: String
+    Default: 1
+    Description: Minimum capacity is 0.5
 Resources:
   # Networking Definition
   VPC:
@@ -301,6 +318,11 @@ Resources:
     Properties:
       Family: DagsterDaemonTask
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref DaemonCpu
+      Memory: !Ref DaemonMemory
       ContainerDefinitions:
         - Name: dagster-daemon
           Image: !Ref DaemonImagePath
@@ -315,7 +337,7 @@ Resources:
             - Name: DAGSTER_HOME
               Value: "/opt/dagster"
             - Name: DAGSTER_POSTGRES_HOST
-              Value: !GetAtt DagsterDatabase.Endpoint.Address
+              Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
             - Name: DAGSTER_POSTGRES_USER
               Value: !Ref DBUsername
             - Name: DAGSTER_POSTGRES_PASSWORD
@@ -327,6 +349,11 @@ Resources:
     Properties:
       Family: DagitTask
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref DagitCpu
+      Memory: !Ref DagitMemory
       ContainerDefinitions:
         - Name: dagit
           Image: !Ref DagitImagePath
@@ -344,7 +371,7 @@ Resources:
               Protocol: tcp
           Environment:
             - Name: DAGSTER_POSTGRES_HOST
-              Value: !GetAtt DagsterDatabase.Endpoint.Address
+              Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
             - Name: DAGSTER_POSTGRES_USER
               Value: !Ref DBUsername
             - Name: DAGSTER_POSTGRES_PASSWORD
@@ -356,6 +383,11 @@ Resources:
     Properties:
       Family: CodeServerTask
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref CodeServerCpu
+      Memory: !Ref CodeServerMemory
       ContainerDefinitions:
         - Name: code-server
           Image: !Ref UserCode1ImagePath
@@ -365,7 +397,7 @@ Resources:
               Protocol: tcp
           Environment:
             - Name: DAGSTER_POSTGRES_HOST
-              Value: !GetAtt DagsterDatabase.Endpoint.Address
+              Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
             - Name: DAGSTER_POSTGRES_USER
               Value: !Ref DBUsername
             - Name: DAGSTER_POSTGRES_PASSWORD
@@ -387,8 +419,10 @@ Resources:
       TaskDefinition: !Ref DagsterDaemonTaskDefinition
       NetworkConfiguration:
         AwsvpcConfiguration:
-          Subnets: !Ref PrivateSubnetA
-          SecurityGroups: !Ref DaemonSecurityGroup
+          Subnets:
+            - !Ref PrivateSubnetA
+          SecurityGroups:
+            - !Ref DaemonSecurityGroup
   DagitService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, DagitTaskDefinition ]
@@ -399,8 +433,10 @@ Resources:
       TaskDefinition: !Ref DagitTaskDefinition
       NetworkConfiguration:
         AwsvpcConfiguration:
-          Subnets: !Ref PublicSubnetA
-          SecurityGroups: !Ref DagitSecurityGroup
+          Subnets:
+           - !Ref PublicSubnetA
+          SecurityGroups:
+           - !Ref DagitSecurityGroup
   CodeServerService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, CodeServerTaskDefinition ]
@@ -411,30 +447,40 @@ Resources:
       TaskDefinition: !Ref CodeServerTaskDefinition
       NetworkConfiguration:
         AwsvpcConfiguration:
-          Subnets: !Ref PrivateSubnetA
-          SecurityGroups: !Ref DaemonSecurityGroup
+          Subnets:
+            - !Ref PrivateSubnetA
+          SecurityGroups:
+            - !Ref DaemonSecurityGroup
 
 
 
   # Database Definition
-  DagsterDatabase:
-    Type: AWS::RDS::DBInstance
+  DagsterDatabaseCluster:
+    Type: 'AWS::RDS::DBCluster'
+    DeletionPolicy: Delete
     Properties:
-      DBName: !Ref DBName
-      AllocatedStorage: !Ref DBStorageSize
-      DBInstanceClass: !Ref DBInstanceClass
       Engine: !Ref DBEngine
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
-      PubliclyAccessible: false
-      VPCSecurityGroups: !GetAtt DatabaseSecurityGroup.GroupId
-      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: !Ref DBMinCapacity
+        MaxCapacity: !Ref DBMaxCapacity
       Tags:
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
           Value: !Ref Environment
-    DeletionPolicy: Snapshot
+  DagsterDatabaseInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      Engine: !Ref DBEngine
+      DBInstanceClass: !Ref DBInstanceClass
+      DBClusterIdentifier: !Ref DagsterDatabaseCluster
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
   DBPassword:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -448,15 +494,3 @@ Resources:
         PasswordLength: 20
         RequireEachIncludedType: true
         ExcludeCharacters: "\"'@/\\"
-  DBUsername:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: DBUsername
-      GenerateSecretString:
-        ExcludeLowercase: false
-        ExcludeNumbers: true
-        ExcludePunctuation: true
-        ExcludeUppercase: false
-        IncludeSpace: false
-        PasswordLength: 10
-        RequireEachIncludedType: true
