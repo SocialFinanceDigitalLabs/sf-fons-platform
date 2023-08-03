@@ -9,11 +9,6 @@ Parameters:
     Type: String
     Default: false
     Description: Is this production or not. Production may have different settings (e.g. more locked down areas, etc)
-  # Networking Parameters
-  DagitHostPort:
-    Type: String
-    Default: "3000"
-    Description: Port the dagit Instance is hosted
   # Environment Parameters
   AWSRegion:
     Type: String
@@ -119,185 +114,29 @@ Parameters:
     Type: String
     Default: 1
     Description: Minimum capacity is 0.5
-Resources:
-  # Networking Definition
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      InstanceTenancy: default
-      Tags:
-        - Key: Project
-          Value: !Sub ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-  VPCGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
-
-  # --- [Public Network Definition]
-  ElasticIP:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-      #InstanceId: !Ref DagitInstance
-  PublicSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Sub "${AWSRegion}a"
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.50.0/24
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-  NatGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt ElasticIP.AllocationId
-      SubnetId: !Ref PublicSubnetA
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-  InternetRoute:
-    Type: AWS::EC2::Route
-    DependsOn: InternetGateway
-    Properties:
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-      RouteTableId: !Ref PublicRouteTable
-  PublicSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnetA
-  DagitSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub "${ProjectName}-Dagit-Security-Group-${Environment}"
-      GroupDescription: "Enable HTTP access via port 80"
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: !Ref DagitHostPort
-          CidrIp: 0.0.0.0/0
-
-  # --- [Private Network Definition]
-  PrivateNatGatewayEIP:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: !Ref VPC
-  PrivateNatGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt PrivateNatGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnetA
-  PrivateSubnetRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-          - Key: Project
-            Value: !Ref ProjectName
-          - Key: Environment
-            Value: !Ref Environment
-  PrivateSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Sub "${AWSRegion}a"
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
+  # Networking Parameters
+  PrivateSubnet1:
+    Type: String
+    Description: ARN for private subnet 1
+  PrivateSubnet2:
+    Type: String
+    Description: ARN for private subnet 2
+  PublicSubnet1:
+    Type: String
+    Description: ARN for public subnet 1
+  PublicSubnet2:
+    Type: String
+    Description: ARN for public subnet 2
   DaemonSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub "${ProjectName}-Daemon-Security-Group-${Environment}"
-      GroupDescription: "Security Group for Dagster Daemon"
-      VpcId: !Ref VPC
-  PrivateSubnetRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateSubnetRouteTable
-      DestinationCidrBlock: "0.0.0.0/0"
-      NatGatewayId: !Ref PrivateNatGateway
-
-  # --- [Database Network Definition]
-  DatabaseSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Sub "${AWSRegion}a"
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.10.0/24
-      MapPublicIpOnLaunch: false
-  DatabaseSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Sub "${AWSRegion}b"
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.30.0/24
-      MapPublicIpOnLaunch: false
-  DatabaseSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupName: DatabaseSubnetGroup
-      DBSubnetGroupDescription: A subnet group used for the database
-      SubnetIds:
-        - !Ref DatabaseSubnetA
-        - !Ref DatabaseSubnetB
-  DatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub "${ProjectName}-Database-Security-Group-${Environment}"
-      VpcId: !Ref VPC
-      GroupDescription: "Database Access"
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: "0.0.0.0/0"
-
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
+    Type: String
+    Description: Security Group ARN top use for the Daemon
+  DagitSecurityGroup:
+    Type: String
+    Description: Security Group ARN top use for the Dagit Interface
+  CodeServerSecurityGroup:
+    Type: String
+    Description: Security Group ARN top use for the Code Servers
+Resources:
   # ECS Definition
   TaskExecutionRole:
     Type: AWS::IAM::Role
@@ -333,6 +172,13 @@ Resources:
           PortMappings:
             - ContainerPort: 8080
               Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            options:
+              awslogs-group: "dagster-daemon-container"
+              awslogs-region: !Ref AWSRegion
+              awslogs-create-group: true
+              awslogs-stream-prefix: "dagster"
           Environment:
             - Name: DAGSTER_HOME
               Value: "/opt/dagster"
@@ -369,6 +215,13 @@ Resources:
           PortMappings:
             - ContainerPort: 3000
               Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            options:
+              awslogs-group: "dagit-container"
+              awslogs-region: !Ref AWSRegion
+              awslogs-create-group: true
+              awslogs-stream-prefix: "dagit"
           Environment:
             - Name: DAGSTER_POSTGRES_HOST
               Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
@@ -395,6 +248,13 @@ Resources:
           PortMappings:
             - ContainerPort: 3000
               Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            options:
+              awslogs-group: "user-code-container"
+              awslogs-region: !Ref AWSRegion
+              awslogs-create-group: true
+              awslogs-stream-prefix: "dagster-user-code"
           Environment:
             - Name: DAGSTER_POSTGRES_HOST
               Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
@@ -408,7 +268,18 @@ Resources:
               Value: !Ref CodeServerPipelineFolder
             - Name: REPO_LOCATION
               Value: !Ref CodeServerPipelineRepoLocation
-
+  DagsterDaemonGroupDescription:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "dagster-daemon-container"
+  DagitGroupDescription:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "dagit-container"
+  UserCodeGroupDescription:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "user-code-container"
   DagsterDaemonService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, DagsterDaemonTaskDefinition ]
@@ -420,7 +291,8 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets:
-            - !Ref PrivateSubnetA
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
           SecurityGroups:
             - !Ref DaemonSecurityGroup
   DagitService:
@@ -434,7 +306,8 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets:
-           - !Ref PublicSubnetA
+           - !Ref PrivateSubnet1
+           - !Ref PrivateSubnet2
           SecurityGroups:
            - !Ref DagitSecurityGroup
   CodeServerService:
@@ -448,9 +321,10 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets:
-            - !Ref PrivateSubnetA
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
           SecurityGroups:
-            - !Ref DaemonSecurityGroup
+            - !Ref CodeServerSecurityGroup
 
 
 

@@ -56,8 +56,10 @@ S3 buckets will be used for ingress and egress of data.
 1. Load `ecr.yaml` into cloudformation 
 2. Create the ECR Repositories
 3. Push the correct images [to the ECR Repositories](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html)
-4. Load dagster.yaml into Cloudformation
-5. Create the Dagster setup
+4. Load `vpc.yaml` into cloudformation
+5. Make note of the output values to be used in the next step
+6. Load `dagster.yaml` into Cloudformation
+7. Create the Dagster setup
 
 # Notes
 This configuration is still a work in progress. Still to do:
