@@ -4,9 +4,19 @@ Description:  This template deploys a VPC, with a pair of public and private sub
   and default routes for them in the private subnets.
 
 Parameters:
+  AWSRegion:
+    Type: String
+    Default: eu-west-2
+    Description: Region to use for the setup
+
   EnvironmentName:
     Description: An environment name that is prefixed to resource names
     Type: String
+
+  DagitSGCIDR:
+    Description: CIDR block for Dgit's security group. All zeros mean can be accessed by anyone.
+    Type: String
+    Default: 0.0.0.0/0
 
   VpcCIDR:
     Description: Please enter the IP range (CIDR notation) for this VPC
@@ -37,6 +47,26 @@ Parameters:
     Type: String
     Default: "3000"
     Description: Port the dagit Instance is hosted
+
+  CodeServerPort:
+    Type: String
+    Default: "4000"
+    Description: Port the code server is running on.
+
+  DatabaseSubnetCIDR1:
+    Type: String
+    Default: 10.192.30.0/24
+    Description: CIDR Block for the database subnet
+
+  DatabaseSubnetCIDR2:
+    Type: String
+    Default: 10.192.31.0/24
+    Description: CIDR Block for the database subnet
+
+  DatabasePort:
+    Type: String
+    Default: 5432
+    Description: Port to connect to the database
 
 Resources:
   VPC:
@@ -158,7 +188,6 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
 
-
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -186,7 +215,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Private Routes (AZ2)
+          Value: !Sub "${EnvironmentName} Private Routes (AZ2)"
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
@@ -201,25 +230,82 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
-  NoIngressSecurityGroup:
+  DaemonSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DependsOn: VPC
     Properties:
-      GroupName: "no-ingress-sg"
-      GroupDescription: "Security group with no ingress rule"
+      GroupName: !Sub "daemon-sg-${EnvironmentName}"
+      GroupDescription: "Security group for the dagster daemon"
       VpcId: !Ref VPC
 
-  IngressSecurityGroup:
+  CodeServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DependsOn: VPC
     Properties:
-      GroupName: !Sub "ingress-sg"
-      GroupDescription: "Enable HTTP access via port 80"
+      GroupName: !Sub "codeserver-sg-${EnvironmentName}"
+      GroupDescription: "Security Group for the Code Server"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: !Ref DagitHostPort
-          CidrIp: 0.0.0.0/0
+          FromPort: 4000
+          ToPort: !Ref CodeServerPort
+          SourceSecurityGroupId: !Ref DaemonSecurityGroup
 
+  DagitSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: VPC
+    Properties:
+      GroupName: !Sub "dagit-sg-${EnvironmentName}"
+      GroupDescription: "Security Group for the Dagit Interface"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: !Ref DagitHostPort
+          CidrIp: !Ref DagitSGCIDR
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: VPC
+    Properties:
+      GroupDescription: "Security Group for the database"
+      GroupName: !Sub "database-sg-${EnvironmentName}"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref DatabasePort
+          ToPort: !Ref DatabasePort
+          SourceSecurityGroupId: !Ref DagitSecurityGroup
+        - IpProtocol: tcp
+          FromPort: !Ref DatabasePort
+          ToPort: !Ref DatabasePort
+          SourceSecurityGroupId: !Ref DaemonSecurityGroup
+        - IpProtocol: tcp
+          FromPort: !Ref DatabasePort
+          ToPort: !Ref DatabasePort
+          SourceSecurityGroupId: !Ref CodeServerSecurityGroup
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for Aurora
+      SubnetIds:
+        - !Ref DatabaseSubnet1
+        - !Ref DatabaseSubnet2
+
+  DatabaseSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref DatabaseSubnetCIDR1
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+
+  DatabaseSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref DatabaseSubnetCIDR2
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
 
 Outputs:
   VPC:
@@ -250,10 +336,22 @@ Outputs:
     Description: A reference to the private subnet in the 2nd Availability Zone
     Value: !Ref PrivateSubnet2
 
-  NoIngressSecurityGroup:
-    Description: Security group with no ingress rule
-    Value: !Ref NoIngressSecurityGroup
+  DagitSecurityGroup:
+    Description: Security group for Dagit
+    Value: !Ref DagitSecurityGroup
 
-  IngressSecurityGroup:
-    Description: Security group with an ingress rule
-    Value: !Ref IngressSecurityGroup
+  DaemonSecurityGroup:
+    Description: Security group for the Daemon
+    Value: !Ref DaemonSecurityGroup
+
+  CodeServerSecurityGroup:
+    Description: Security group for the Code Server
+    Value: !Ref CodeServerSecurityGroup
+
+  DatabaseSecurityGroup:
+    Description: Security Group for the database
+    Value: !Ref DatabaseSecurityGroup
+
+  DatabaseSubnetGroup:
+    Description: Subnet Group for the database
+    Value: !Ref DatabaseSubnetGroup

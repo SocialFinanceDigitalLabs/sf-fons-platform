@@ -115,6 +115,9 @@ Parameters:
     Default: 1
     Description: Minimum capacity is 0.5
   # Networking Parameters
+  DatabaseSubnetGroup:
+    Type: String
+    Description: Database Subnet Group ID
   PrivateSubnet1:
     Type: String
     Description: ARN for private subnet 1
@@ -129,16 +132,19 @@ Parameters:
     Description: ARN for public subnet 2
   DaemonSecurityGroup:
     Type: String
-    Description: Security Group ARN top use for the Daemon
+    Description: Security Group ARN to use for the Daemon
   DagitSecurityGroup:
     Type: String
-    Description: Security Group ARN top use for the Dagit Interface
+    Description: Security Group ARN to use for the Dagit Interface
   CodeServerSecurityGroup:
     Type: String
-    Description: Security Group ARN top use for the Code Servers
+    Description: Security Group ARN to use for the Code Servers
+  DatabaseSecurityGroup:
+    Type: String
+    Description: Security Group ARN to use for the Database
 Resources:
   # ECS Definition
-  TaskExecutionRole:
+  DagitTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -150,13 +156,39 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+  DaemonTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+  CodeServerTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+
   DagsterCluster:
     Type: AWS::ECS::Cluster
   DagsterDaemonTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: DagsterDaemonTask
-      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ExecutionRoleArn: !GetAtt DaemonTaskExecutionRole.Arn
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -174,7 +206,7 @@ Resources:
               Protocol: tcp
           LogConfiguration:
             LogDriver: awslogs
-            options:
+            Options:
               awslogs-group: "dagster-daemon-container"
               awslogs-region: !Ref AWSRegion
               awslogs-create-group: true
@@ -194,7 +226,7 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: DagitTask
-      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ExecutionRoleArn: !GetAtt DagitTaskExecutionRole.Arn
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -217,7 +249,7 @@ Resources:
               Protocol: tcp
           LogConfiguration:
             LogDriver: awslogs
-            options:
+            Options:
               awslogs-group: "dagit-container"
               awslogs-region: !Ref AWSRegion
               awslogs-create-group: true
@@ -235,7 +267,7 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: CodeServerTask
-      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ExecutionRoleArn: !GetAtt CodeServerTaskExecutionRole.Arn
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -250,7 +282,7 @@ Resources:
               Protocol: tcp
           LogConfiguration:
             LogDriver: awslogs
-            options:
+            Options:
               awslogs-group: "user-code-container"
               awslogs-region: !Ref AWSRegion
               awslogs-create-group: true
@@ -305,6 +337,7 @@ Resources:
       TaskDefinition: !Ref DagitTaskDefinition
       NetworkConfiguration:
         AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
           Subnets:
            - !Ref PrivateSubnet1
            - !Ref PrivateSubnet2
@@ -336,25 +369,19 @@ Resources:
       Engine: !Ref DBEngine
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
+      StorageEncrypted: true
       ServerlessV2ScalingConfiguration:
         MinCapacity: !Ref DBMinCapacity
         MaxCapacity: !Ref DBMaxCapacity
+      VpcSecurityGroupIds:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
       Tags:
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
           Value: !Ref Environment
-  DagsterDatabaseInstance:
-    Type: 'AWS::RDS::DBInstance'
-    Properties:
-      Engine: !Ref DBEngine
-      DBInstanceClass: !Ref DBInstanceClass
-      DBClusterIdentifier: !Ref DagsterDatabaseCluster
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
+
   DBPassword:
     Type: AWS::SecretsManager::Secret
     Properties:
