@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  This template creates the identity provision for the service, and can connect to an identity provider
+such as Azure or GCP
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+  ApplicationName:
+    Description: The name of the application (No Spaces)
+    Type: String
+  CallbackURL:
+    Description: The callback URL from the identity provider
+    Type: String
+  LogoutURL:
+    Description: The logout URL from the identity provider
+    Type: String
+  AwsRegion:
+    Description: The region to use for the resources
+    Default: eu-west-2
+    Type: String
+
+Resources:
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${ApplicationName}-User-Pool-${EnvironmentName}"
+      AutoVerifiedAttributes:
+        - email
+      EmailVerificationSubject: Verify your email
+      EmailVerificationMessage: Please click the link below to verify your email address.
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireUppercase: true
+          RequireSymbols: true
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${ApplicationName}-App-Client-${EnvironmentName}"
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: true
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - email
+        - aws.cognito.signin.user.admin
+        - openid
+      LogoutURLs:
+        - !Ref LogoutURL
+      CallbackURLs:
+        - !Ref CallbackURL
+
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "${ApplicationName}-${EnvironmentName}"  # Might need to be "${ApplicationName}-${EnvironmentName}.auth.${AwsRegion}.amazoncognito.com"
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: MyIdentityPool
+      CognitoIdentityProviders:
+        - ClientId: !Ref CognitoUserPoolClient
+          ProviderName: !GetAtt CognitoUserPool.ProviderName
+      AllowUnauthenticatedIdentities: false
+      OpenIdConnectProviderARNs:
+        - "arn:aws:oidc:<region>:<account-id>:<user-pool-id>"
