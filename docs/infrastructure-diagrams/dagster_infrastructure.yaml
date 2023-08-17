@@ -1,0 +1,36 @@
+from diagrams import Cluster, Diagram, Edge
+from diagrams.aws.compute import ECS, ECR
+from diagrams.aws.database import ElastiCache, RDS
+from diagrams.aws.network import ELB
+from diagrams.aws.network import Route53
+from diagrams.aws.network import PrivateSubnet, NATGateway, PublicSubnet, InternetGateway
+
+with Diagram("Clustered Web Services", show=False):
+  with Cluster("AWS CLoud"):
+    with Cluster("AWS VPC"):
+      with Cluster("Availability Zone 1"):
+        with Cluster("Public Subnet"):
+          nat = NATGateway("NAT Gateway")
+          dagit = ECS("Dagit Service")
+          fe = ECS("Front End Service")
+        with Cluster("Private Subnet"):
+          daemon = ECS("Dagster Daemon")
+          code_server = ECS("Code Server")
+        with Cluster("Private Subnet"):
+          db = RDS("Dagster Database")
+      InternetGateway("Internet Gateway")
+
+      dagit_ecr = ECR("Dagit Registry")
+      daemon_ecr = ECR("Daemon Registry")
+      code_server_ecr = ECR("Code Server Registry")
+      fe_ecr = ECR("Front End Registry")
+
+      dagit - Edge(color="orage", style="dashed", label="Public Security Group")
+      daemon - Edge(color="orage", style="dashed", label="Private Security Group")
+      code_server - Edge(color="orage", style="dashed", label="Private Security Group")
+      dagit >> nat << daemon
+      dagit >> nat << db
+      dagit_ecr >> dagit
+      daemon_ecr >> daemon
+      fe_ecr >> fe
+      code_server_ecr >> code_server
