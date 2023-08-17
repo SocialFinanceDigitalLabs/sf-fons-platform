@@ -72,3 +72,16 @@ Resources:
       AllowUnauthenticatedIdentities: false
       OpenIdConnectProviderARNs:
         - "arn:aws:oidc:<region>:<account-id>:<user-pool-id>"
+
+  UserPoolIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      ProviderName: "Azure"
+      ProviderDetails:
+        MetadataURL: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+      ProviderType: "SAML"
+      AttributeMapping:
+        email: "Attribute"
+      IdpIdentifiers:
+        - "IdpIdentifier"
