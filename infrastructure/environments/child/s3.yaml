@@ -20,7 +20,7 @@ Parameters:
     Default: 2190
     Description: How long before files are automatically deleted (default 6 years)
 
-  origin:
+  Origin:
     Type: String
     Default: "*"
 
@@ -52,7 +52,7 @@ Resources:
               - PUT
               - DELETE
             AllowedOrigins:
-              - !Ref origin
+              - !Ref Origin
             Id: IPSRule
 
   StorageRole:
