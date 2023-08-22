@@ -102,6 +102,10 @@ Parameters:
     Type: String
     Default: postgres
     Description: The name to be used for the database
+  DBPort:
+    Type: String
+    Default: 3306
+    Description: The port to use to connect to the database
   DBUsername:
     Type: String
     Default: postgres
@@ -142,6 +146,10 @@ Parameters:
   DatabaseSecurityGroup:
     Type: String
     Description: Security Group ARN to use for the Database
+  MyPrivateServiceDiscoveryNamespace:
+    Type: String
+    Description: Namespace Arn for private network
+
 Resources:
   # ECS Definition
   DagitTaskExecutionRole:
@@ -156,6 +164,11 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+
   DaemonTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -168,6 +181,11 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+
   CodeServerTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -180,15 +198,20 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
 
   DagsterCluster:
     Type: AWS::ECS::Cluster
+
   DagsterDaemonTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: DagsterDaemonTask
       ExecutionRoleArn: !GetAtt DaemonTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt DaemonTaskExecutionRole.Arn
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -213,7 +236,7 @@ Resources:
               awslogs-stream-prefix: "dagster"
           Environment:
             - Name: DAGSTER_HOME
-              Value: "/opt/dagster"
+              Value: "/opt/dagster/dagster_home/"
             - Name: DAGSTER_POSTGRES_HOST
               Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
             - Name: DAGSTER_POSTGRES_USER
@@ -222,11 +245,15 @@ Resources:
               Value: !Ref DBPassword
             - Name: DAGSTER_POSTGRES_DB
               Value: !Ref DBName
+            - Name: DAGSTER_POSTGRES_PORT
+              Value: !Ref DBPort
+
   DagitTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: DagitTask
       ExecutionRoleArn: !GetAtt DagitTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt DagitTaskExecutionRole.Arn
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -263,23 +290,27 @@ Resources:
               Value: !Ref DBPassword
             - Name: DAGSTER_POSTGRES_DB
               Value: !Ref DBName
+            - Name: DAGSTER_POSTGRES_PORT
+              Value: !Ref DBPort
   CodeServerTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: CodeServerTask
       ExecutionRoleArn: !GetAtt CodeServerTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt CodeServerTaskExecutionRole.Arn
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
       Cpu: !Ref CodeServerCpu
       Memory: !Ref CodeServerMemory
       ContainerDefinitions:
-        - Name: code-server
+        - Name: user_code
           Image: !Ref UserCode1ImagePath
           Memory: 512
           PortMappings:
-            - ContainerPort: 3000
+            - ContainerPort: 4000
               Protocol: tcp
+              Name: 4000
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -288,30 +319,26 @@ Resources:
               awslogs-create-group: true
               awslogs-stream-prefix: "dagster-user-code"
           Environment:
-            - Name: DAGSTER_POSTGRES_HOST
-              Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
-            - Name: DAGSTER_POSTGRES_USER
-              Value: !Ref DBUsername
-            - Name: DAGSTER_POSTGRES_PASSWORD
-              Value: !Ref DBPassword
-            - Name: DAGSTER_POSTGRES_DB
-              Value: !Ref DBName
             - Name: CODE_FOLDER
               Value: !Ref CodeServerPipelineFolder
             - Name: REPO_LOCATION
               Value: !Ref CodeServerPipelineRepoLocation
+
   DagsterDaemonGroupDescription:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: "dagster-daemon-container"
+
   DagitGroupDescription:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: "dagit-container"
+
   UserCodeGroupDescription:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: "user-code-container"
+
   DagsterDaemonService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, DagsterDaemonTaskDefinition ]
@@ -327,6 +354,10 @@ Resources:
             - !Ref PrivateSubnet2
           SecurityGroups:
             - !Ref DaemonSecurityGroup
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace: !Ref MyPrivateServiceDiscoveryNamespace
+
   DagitService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, DagitTaskDefinition ]
@@ -339,10 +370,14 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
           Subnets:
-           - !Ref PrivateSubnet1
-           - !Ref PrivateSubnet2
+           - !Ref PublicSubnet1
+           - !Ref PublicSubnet2
           SecurityGroups:
            - !Ref DagitSecurityGroup
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace: !Ref MyPrivateServiceDiscoveryNamespace
+
   CodeServerService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, CodeServerTaskDefinition ]
@@ -358,7 +393,22 @@ Resources:
             - !Ref PrivateSubnet2
           SecurityGroups:
             - !Ref CodeServerSecurityGroup
-
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace: !Ref MyPrivateServiceDiscoveryNamespace
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: "dagster-daemon-code-service-map"
+            awslogs-region: !Ref AWSRegion
+            awslogs-create-group: true
+            awslogs-stream-prefix: "dagster"
+        Services:
+          - DiscoveryName: user_code
+            PortName: 4000
+            ClientAliases:
+              - DnsName: user_code
+                Port: 4000
 
 
   # Database Definition
@@ -367,6 +417,7 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       Engine: !Ref DBEngine
+      DBClusterIdentifier: !Ref DBName
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
       StorageEncrypted: true
@@ -382,6 +433,13 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  DagsterDatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: !Ref DBEngine
+      DBInstanceClass: db.serverless
+      DBClusterIdentifier: !Ref DagsterDatabaseCluster
+
   DBPassword:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -395,3 +453,8 @@ Resources:
         PasswordLength: 20
         RequireEachIncludedType: true
         ExcludeCharacters: "\"'@/\\"
+
+Outputs:
+  DatabaseEndpointAddress:
+    Description: Endpoint Address for the Database
+    Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
