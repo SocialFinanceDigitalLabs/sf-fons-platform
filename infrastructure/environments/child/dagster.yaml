@@ -550,4 +550,8 @@ Resources:
 Outputs:
   DatabaseEndpointAddress:
     Description: Endpoint Address for the Database
+<<<<<<< HEAD
     Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
+=======
+    Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
+>>>>>>> 1ef8c9af24107d2ea1e57f99bd5c563ae00483e8
