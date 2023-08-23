@@ -15,7 +15,7 @@ Parameters:
     Type: String
 
   DagitSGCIDR:
-    Description: CIDR block for Dgit's security group. All zeros mean can be accessed by anyone.
+    Description: CIDR block for Dagit's security group. All zeros mean can be accessed by anyone.
     Type: String
     Default: 0.0.0.0/0
 
@@ -66,7 +66,7 @@ Parameters:
 
   DatabasePort:
     Type: String
-    Default: 5432
+    Default: 3306
     Description: Port to connect to the database
 
 Resources:
@@ -149,6 +149,30 @@ Resources:
     Properties:
       Domain: vpc
 
+  NatGatewayDatabaseEIP1:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGatewayDatabaseEIP2:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGatewayDatabase1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayDatabaseEIP1.AllocationId
+      SubnetId: !Ref DatabaseSubnet1
+
+  NatGatewayDatabase2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayDatabaseEIP2.AllocationId
+      SubnetId: !Ref DatabaseSubnet2
+
   NatGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -199,6 +223,7 @@ Resources:
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
+    DependsOn: PrivateRouteTable1
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -231,6 +256,60 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: 'Gateway'
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - 's3:GetObject'
+            Resource:
+              - '*'  #To Add Later: S3 ARNS
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
+
+  DatabaseInterfacePrivateEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: 'Interface'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.rds'
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref DaemonSecurityGroup
+        - !Ref CodeServerSecurityGroup
+        - !Ref DatabaseSecurityGroup
+      PrivateDnsEnabled: true
+
+  S3InterfacePrivateEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: 'Interface'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref DaemonSecurityGroup
+        - !Ref CodeServerSecurityGroup
+      PrivateDnsEnabled: true
+
+  PrivateServiceDiscoveryNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: my-namespace.local
+      Vpc: !Ref VPC
+
   DaemonSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     DependsOn: VPC
@@ -238,6 +317,9 @@ Resources:
       GroupName: !Sub "daemon-sg-${EnvironmentName}"
       GroupDescription: "Security group for the dagster daemon"
       VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
 
   CodeServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -251,6 +333,13 @@ Resources:
           FromPort: 4000
           ToPort: !Ref CodeServerPort
           SourceSecurityGroupId: !Ref DaemonSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 4000
+          ToPort: !Ref CodeServerPort
+          SourceSecurityGroupId: !Ref DagitSecurityGroup
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
 
   DagitSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -264,6 +353,11 @@ Resources:
           FromPort: 3000
           ToPort: !Ref DagitHostPort
           CidrIp: !Ref DagitSGCIDR
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -285,6 +379,9 @@ Resources:
           FromPort: !Ref DatabasePort
           ToPort: !Ref DatabasePort
           SourceSecurityGroupId: !Ref CodeServerSecurityGroup
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
 
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -356,3 +453,7 @@ Outputs:
   DatabaseSubnetGroup:
     Description: Subnet Group for the database
     Value: !Ref DatabaseSubnetGroup
+
+  PrivateServiceDiscoveryNamespace:
+    Description: Namespace for private service discovery
+    Value: !GetAtt PrivateServiceDiscoveryNamespace.Arn
