@@ -5,21 +5,16 @@ Parameters:
     Type: String
     Default: Dagster
     Description: Name of the platform. Used to name things like database, etc.
-  IsProduction:
-    Type: String
-    Default: false
-    Description: Is this production or not. Production may have different settings (e.g. more locked down areas, etc)
+
   # Environment Parameters
+  Environment:
+    Type: String
+    Description: The name for the environment. Expected values are dev, staging, prod
   AWSRegion:
     Type: String
     Default: eu-west-2
     Description: Region to use for the setup
-  AWSAccountId:
-    Type: String
-    Description: The Account Id for the AWS Account
-  Environment:
-    Type: String
-    Description: The name for the environment
+
   # ECS Parameters
   DaemonCpu:
     Type: String
@@ -81,6 +76,7 @@ Parameters:
     Type: String
     Default: "repository.py"
     Description: Location of the repo.py file that controls the repository
+
   # Database Parameters
   DBStorageSize:
     Type: Number
@@ -118,6 +114,7 @@ Parameters:
     Type: String
     Default: 1
     Description: Minimum capacity is 0.5
+
   # Networking Parameters
   DatabaseSubnetGroup:
     Type: String
@@ -148,7 +145,10 @@ Parameters:
     Description: Security Group ARN to use for the Database
   MyPrivateServiceDiscoveryNamespace:
     Type: String
-    Description: Namespace Arn for private network
+    Description: Namespace for private network.
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, "prod"]
 
 Resources:
   # ECS Definition
@@ -164,6 +164,22 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+
+  DagitTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
@@ -186,6 +202,22 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
 
+  DaemonTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+
   CodeServerTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -203,15 +235,40 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
 
+  CodeServerTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+
   DagsterCluster:
     Type: AWS::ECS::Cluster
+    Properties:
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
 
   DagsterDaemonTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: DagsterDaemonTask
       ExecutionRoleArn: !GetAtt DaemonTaskExecutionRole.Arn
-      TaskRoleArn: !GetAtt DaemonTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt DaemonTaskRole.Arn
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -247,13 +304,18 @@ Resources:
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
               Value: !Ref DBPort
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
 
   DagitTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: DagitTask
       ExecutionRoleArn: !GetAtt DagitTaskExecutionRole.Arn
-      TaskRoleArn: !GetAtt DagitTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt DagitTaskRole.Arn
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -292,12 +354,18 @@ Resources:
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
               Value: !Ref DBPort
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
   CodeServerTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: CodeServerTask
       ExecutionRoleArn: !GetAtt CodeServerTaskExecutionRole.Arn
-      TaskRoleArn: !GetAtt CodeServerTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt CodeServerTaskRole.Arn
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -323,6 +391,11 @@ Resources:
               Value: !Ref CodeServerPipelineFolder
             - Name: REPO_LOCATION
               Value: !Ref CodeServerPipelineRepoLocation
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
 
   DagsterDaemonGroupDescription:
     Type: AWS::Logs::LogGroup
@@ -357,13 +430,18 @@ Resources:
       ServiceConnectConfiguration:
         Enabled: true
         Namespace: !Ref MyPrivateServiceDiscoveryNamespace
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
 
   DagitService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, DagitTaskDefinition ]
     Properties:
       Cluster: !Ref DagsterCluster
-      DesiredCount: 1
+      DesiredCount: !If [IsProd, 0, 1]
       LaunchType: !Ref DagitLaunchType
       TaskDefinition: !Ref DagitTaskDefinition
       NetworkConfiguration:
@@ -377,6 +455,11 @@ Resources:
       ServiceConnectConfiguration:
         Enabled: true
         Namespace: !Ref MyPrivateServiceDiscoveryNamespace
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
 
   CodeServerService:
     Type: AWS::ECS::Service
@@ -409,6 +492,11 @@ Resources:
             ClientAliases:
               - DnsName: user_code
                 Port: 4000
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
 
 
   # Database Definition
@@ -439,6 +527,11 @@ Resources:
       Engine: !Ref DBEngine
       DBInstanceClass: db.serverless
       DBClusterIdentifier: !Ref DagsterDatabaseCluster
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
 
   DBPassword:
     Type: AWS::SecretsManager::Secret
