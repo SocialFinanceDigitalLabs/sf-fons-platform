@@ -10,10 +10,6 @@ Parameters:
   Environment:
     Type: String
     Description: The name for the environment. Expected values are dev, staging, prod
-  AWSRegion:
-    Type: String
-    Default: eu-west-2
-    Description: Region to use for the setup
 
   # ECS Parameters
   DaemonCpu:
@@ -288,7 +284,7 @@ Resources:
             LogDriver: awslogs
             Options:
               awslogs-group: "dagster-daemon-container"
-              awslogs-region: !Ref AWSRegion
+              awslogs-region: !Ref AWS::Region
               awslogs-create-group: true
               awslogs-stream-prefix: "dagster"
           Environment:
@@ -340,7 +336,7 @@ Resources:
             LogDriver: awslogs
             Options:
               awslogs-group: "dagit-container"
-              awslogs-region: !Ref AWSRegion
+              awslogs-region: !Ref AWS::Region
               awslogs-create-group: true
               awslogs-stream-prefix: "dagit"
           Environment:
@@ -383,7 +379,7 @@ Resources:
             LogDriver: awslogs
             Options:
               awslogs-group: "user-code-container"
-              awslogs-region: !Ref AWSRegion
+              awslogs-region: !Ref AWS::Region
               awslogs-create-group: true
               awslogs-stream-prefix: "dagster-user-code"
           Environment:
@@ -483,7 +479,7 @@ Resources:
           LogDriver: awslogs
           Options:
             awslogs-group: "dagster-daemon-code-service-map"
-            awslogs-region: !Ref AWSRegion
+            awslogs-region: !Ref AWS::Region
             awslogs-create-group: true
             awslogs-stream-prefix: "dagster"
         Services:
