@@ -5,9 +5,14 @@ Description:  This template deploys a VPC, with a pair of public and private sub
   and default routes for them in the private subnets.
 
 Parameters:
-  EnvironmentName:
-    Description: An environment name that is prefixed to resource names
+  Environment:
+    Description: An environment name that is prefixed to resource names. Valid values are dev, staging, prod
     Type: String
+
+  DagitSGCIDR:
+    Description: CIDR block for Dagit's security group. All zeros mean can be accessed by anyone.
+    Type: String
+    Default: 0.0.0.0/0
 
   VpcCIDR:
     Description: Please enter the IP range (CIDR notation) for this VPC
@@ -39,6 +44,26 @@ Parameters:
     Default: "3000"
     Description: Port the dagit Instance is hosted
 
+  CodeServerPort:
+    Type: String
+    Default: "4000"
+    Description: Port the code server is running on.
+
+  DatabaseSubnetCIDR1:
+    Type: String
+    Default: 10.192.30.0/24
+    Description: CIDR Block for the database subnet
+
+  DatabaseSubnetCIDR2:
+    Type: String
+    Default: 10.192.31.0/24
+    Description: CIDR Block for the database subnet
+
+  DatabasePort:
+    Type: String
+    Default: 3306
+    Description: Port to connect to the database
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -48,14 +73,14 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Ref EnvironmentName
+          Value: !Ref Environment
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Ref EnvironmentName
+          Value: !Ref Environment
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -72,7 +97,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
+          Value: !Sub ${Environment} Public Subnet (AZ1)
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -83,7 +108,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
+          Value: !Sub ${Environment} Public Subnet (AZ2)
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -94,7 +119,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Private Subnet (AZ1)
+          Value: !Sub ${Environment} Private Subnet (AZ1)
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -105,7 +130,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Private Subnet (AZ2)
+          Value: !Sub ${Environment} Private Subnet (AZ2)
 
   NatGateway1EIP:
     Type: AWS::EC2::EIP
@@ -118,6 +143,30 @@ Resources:
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
+
+  NatGatewayDatabaseEIP1:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGatewayDatabaseEIP2:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGatewayDatabase1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayDatabaseEIP1.AllocationId
+      SubnetId: !Ref DatabaseSubnet1
+
+  NatGatewayDatabase2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayDatabaseEIP2.AllocationId
+      SubnetId: !Ref DatabaseSubnet2
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -137,7 +186,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Public Routes
+          Value: !Sub ${Environment} Public Routes
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -159,17 +208,17 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
 
-
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Private Routes (AZ1)
+          Value: !Sub ${Environment} Private Routes (AZ1)
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
+    DependsOn: PrivateRouteTable1
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -187,7 +236,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Private Routes (AZ2)
+          Value: !Sub "${Environment} Private Routes (AZ2)"
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
@@ -202,25 +251,154 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
-  NoIngressSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
     Properties:
-      GroupName: "no-ingress-sg"
-      GroupDescription: "Security group with no ingress rule"
+      VpcEndpointType: 'Gateway'
       VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - 's3:GetObject'
+            Resource:
+              - '*'  #To Add Later: S3 ARNS
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
 
-  IngressSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
+  DatabaseInterfacePrivateEndpoint:
+    Type: AWS::EC2::VPCEndpoint
     Properties:
-      GroupName: !Sub "ingress-sg"
-      GroupDescription: "Enable HTTP access via port 80"
+      VpcEndpointType: 'Interface'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.rds'
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref DaemonSecurityGroup
+        - !Ref CodeServerSecurityGroup
+        - !Ref DatabaseSecurityGroup
+      PrivateDnsEnabled: true
+
+  S3InterfacePrivateEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: 'Interface'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref DaemonSecurityGroup
+        - !Ref CodeServerSecurityGroup
+      PrivateDnsEnabled: true
+
+  PrivateServiceDiscoveryNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: my-namespace.local
+      Vpc: !Ref VPC
+
+  DaemonSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: VPC
+    Properties:
+      GroupName: !Sub "daemon-sg-${Environment}"
+      GroupDescription: "Security group for the dagster daemon"
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
+  CodeServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: VPC
+    Properties:
+      GroupName: !Sub "codeserver-sg-${Environment}"
+      GroupDescription: "Security Group for the Code Server"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: !Ref DagitHostPort
-          CidrIp: 0.0.0.0/0
+          FromPort: 4000
+          ToPort: !Ref CodeServerPort
+          SourceSecurityGroupId: !Ref DaemonSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 4000
+          ToPort: !Ref CodeServerPort
+          SourceSecurityGroupId: !Ref DagitSecurityGroup
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
 
+  DagitSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: VPC
+    Properties:
+      GroupName: !Sub "dagit-sg-${Environment}"
+      GroupDescription: "Security Group for the Dagit Interface"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: !Ref DagitHostPort
+          CidrIp: !Ref DagitSGCIDR
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: VPC
+    Properties:
+      GroupDescription: "Security Group for the database"
+      GroupName: !Sub "database-sg-${Environment}"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref DatabasePort
+          ToPort: !Ref DatabasePort
+          SourceSecurityGroupId: !Ref DagitSecurityGroup
+        - IpProtocol: tcp
+          FromPort: !Ref DatabasePort
+          ToPort: !Ref DatabasePort
+          SourceSecurityGroupId: !Ref DaemonSecurityGroup
+        - IpProtocol: tcp
+          FromPort: !Ref DatabasePort
+          ToPort: !Ref DatabasePort
+          SourceSecurityGroupId: !Ref CodeServerSecurityGroup
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for Aurora
+      SubnetIds:
+        - !Ref DatabaseSubnet1
+        - !Ref DatabaseSubnet2
+
+  DatabaseSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref DatabaseSubnetCIDR1
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+
+  DatabaseSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref DatabaseSubnetCIDR2
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
 
 Outputs:
   VPC:
@@ -251,10 +429,26 @@ Outputs:
     Description: A reference to the private subnet in the 2nd Availability Zone
     Value: !Ref PrivateSubnet2
 
-  NoIngressSecurityGroup:
-    Description: Security group with no ingress rule
-    Value: !Ref NoIngressSecurityGroup
+  DagitSecurityGroup:
+    Description: Security group for Dagit
+    Value: !Ref DagitSecurityGroup
 
-  IngressSecurityGroup:
-    Description: Security group with an ingress rule
-    Value: !Ref IngressSecurityGroup
+  DaemonSecurityGroup:
+    Description: Security group for the Daemon
+    Value: !Ref DaemonSecurityGroup
+
+  CodeServerSecurityGroup:
+    Description: Security group for the Code Server
+    Value: !Ref CodeServerSecurityGroup
+
+  DatabaseSecurityGroup:
+    Description: Security Group for the database
+    Value: !Ref DatabaseSecurityGroup
+
+  DatabaseSubnetGroup:
+    Description: Subnet Group for the database
+    Value: !Ref DatabaseSubnetGroup
+
+  PrivateServiceDiscoveryNamespace:
+    Description: Name of the Namespace for private service discovery. To be used for Service Connect for ECS
+    Value: !GetAtt PrivateServiceDiscoveryNamespace.Name
