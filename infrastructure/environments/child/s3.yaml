@@ -1,5 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description:  This template creates a bucket and the needed role to access it for ingress/egress operations
+Description:  This template creates a bucket and the needed role to access it for ingress operations. This is the
+bucket which connects to the frontend
 
 Parameters:
   Environment:
@@ -25,7 +26,7 @@ Parameters:
     Default: "*"
 
 Resources:
-  S3Bucket:
+  IngestBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
       BucketName: !Sub "${AppName}-ingress-${OrganisationName}-${Environment}"
@@ -79,11 +80,11 @@ Resources:
                   - "s3:PutObject"
                   - "s3:GetObject"
                   - "s3:DeleteObject"
-                Resource: !Sub "${S3Bucket.Arn}/*"
+                Resource: !Sub "${IngestBucket.Arn}/*"
 
 Outputs:
   BucketName:
-    Value: !Ref S3Bucket
+    Value: !Ref IngestBucket
     Description: Name of the sample Amazon S3 bucket with a lifecycle configuration.
   RoleARN:
     Value: !GetAtt StorageRole.Arn
