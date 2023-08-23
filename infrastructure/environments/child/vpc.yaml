@@ -4,13 +4,8 @@ Description:  This template deploys a VPC, with a pair of public and private sub
   and default routes for them in the private subnets.
 
 Parameters:
-  AWSRegion:
-    Type: String
-    Default: eu-west-2
-    Description: Region to use for the setup
-
-  EnvironmentName:
-    Description: An environment name that is prefixed to resource names
+  Environment:
+    Description: An environment name that is prefixed to resource names. Valid values are dev, staging, prod
     Type: String
 
   DagitSGCIDR:
@@ -77,14 +72,14 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Ref EnvironmentName
+          Value: !Ref Environment
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Ref EnvironmentName
+          Value: !Ref Environment
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -101,7 +96,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Public Subnet (AZ1)
+          Value: !Sub ${Environment} Public Subnet (AZ1)
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -112,7 +107,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Public Subnet (AZ2)
+          Value: !Sub ${Environment} Public Subnet (AZ2)
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -123,7 +118,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Private Subnet (AZ1)
+          Value: !Sub ${Environment} Private Subnet (AZ1)
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -134,7 +129,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Private Subnet (AZ2)
+          Value: !Sub ${Environment} Private Subnet (AZ2)
 
   NatGateway1EIP:
     Type: AWS::EC2::EIP
@@ -190,7 +185,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Public Routes
+          Value: !Sub ${Environment} Public Routes
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -218,7 +213,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName} Private Routes (AZ1)
+          Value: !Sub ${Environment} Private Routes (AZ1)
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
@@ -240,7 +235,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub "${EnvironmentName} Private Routes (AZ2)"
+          Value: !Sub "${Environment} Private Routes (AZ2)"
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
@@ -313,7 +308,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     DependsOn: VPC
     Properties:
-      GroupName: !Sub "daemon-sg-${EnvironmentName}"
+      GroupName: !Sub "daemon-sg-${Environment}"
       GroupDescription: "Security group for the dagster daemon"
       VpcId: !Ref VPC
       SecurityGroupEgress:
@@ -324,7 +319,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     DependsOn: VPC
     Properties:
-      GroupName: !Sub "codeserver-sg-${EnvironmentName}"
+      GroupName: !Sub "codeserver-sg-${Environment}"
       GroupDescription: "Security Group for the Code Server"
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -344,7 +339,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     DependsOn: VPC
     Properties:
-      GroupName: !Sub "dagit-sg-${EnvironmentName}"
+      GroupName: !Sub "dagit-sg-${Environment}"
       GroupDescription: "Security Group for the Dagit Interface"
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -363,7 +358,7 @@ Resources:
     DependsOn: VPC
     Properties:
       GroupDescription: "Security Group for the database"
-      GroupName: !Sub "database-sg-${EnvironmentName}"
+      GroupName: !Sub "database-sg-${Environment}"
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -454,5 +449,5 @@ Outputs:
     Value: !Ref DatabaseSubnetGroup
 
   PrivateServiceDiscoveryNamespace:
-    Description: Namespace for private service discovery
-    Value: !GetAtt PrivateServiceDiscoveryNamespace.Arn
+    Description: Name of the Namespace for private service discovery. To be used for Service Connect for ECS
+    Value: !GetAtt PrivateServiceDiscoveryNamespace.Name
