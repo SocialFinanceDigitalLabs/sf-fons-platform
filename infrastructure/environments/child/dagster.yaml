@@ -1,141 +1,178 @@
 AWSTemplateFormatVersion: 2010-09-09
+Description:  This deploys the dagster service to the infrastructure
+
 Parameters:
   # Project-level Parameters
   ProjectName:
     Type: String
     Default: Dagster
     Description: Name of the platform. Used to name things like database, etc.
+
   IsProduction:
     Type: String
     Default: false
     Description: Is this production or not. Production may have different settings (e.g. more locked down areas, etc)
+
   # Environment Parameters
   AWSRegion:
     Type: String
     Default: eu-west-2
     Description: Region to use for the setup
+
   AWSAccountId:
     Type: String
     Description: The Account Id for the AWS Account
+
   Environment:
     Type: String
     Description: The name for the environment
+
   # ECS Parameters
   DaemonCpu:
     Type: String
     Default: 256
     Description: CPU to use for Daemon
+
   DagitCpu:
     Type: String
     Default: 256
     Description: CPU to use for Dagit
+
   CodeServerCpu:
     Type: String
     Default: 256
     Description: CPU to use for Code Server
+
   DaemonMemory:
     Type: String
     Default: 512
     Description: Memory to use for Daemon
+
   DagitMemory:
     Type: String
     Default: 512
     Description: Memory to use for Dagit
+
   CodeServerMemory:
     Type: String
     Default: 512
     Description: CPU to use for the Code Server
+
   DaemonImagePath:
     Type: String
     Default: ""
     Description: Docker hub image:Version or ECR URL in format aws_account_id.dkr.ecr.region.amazonaws.com/my-repository:latest
+
   DagitImagePath:
     Type: String
     Default: ""
     Description: Docker hub image:Version or ECR URL in format aws_account_id.dkr.ecr.region.amazonaws.com/my-repository:latest
+
   UserCode1ImagePath:
     Type: String
     Default: ""
     Description: Docker hub image:Version or ECR URL in format aws_account_id.dkr.ecr.region.amazonaws.com/my-repository:latest
+
   DaemonLaunchType:
     Type: String
     Default: "FARGATE"
     Description: Either FARGATE or EC2 type can be used
+
   DagitLaunchType:
     Type: String
     Default: "FARGATE"
     Description: Either FARGATE or EC2 type can be used
+
   CodeServerLaunchType:
     Type: String
     Default: "FARGATE"
     Description: Either FARGATE or EC2 type can be used
+
   HealthCheckGracePeriodSeconds:
     Type: String
     Default: 30
     Description: ??
+
   CodeServerPipelineFolder:
     Type: String
     Default: "pipeline"
     Description: What folder the repo exists in on the code server
+
   CodeServerPipelineRepoLocation:
     Type: String
     Default: "repository.py"
     Description: Location of the repo.py file that controls the repository
+
   # Database Parameters
   DBStorageSize:
     Type: Number
     Default: 20
     Description: How many GB the db should be allocated for storage
+
   DBInstanceClass:
     Type: String
     Default: db.serverless
     Description: Type of resources for the database to use. See https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Concepts.DBInstanceClass.html#Concepts.DBInstanceClass.Types.serverless-v2
+
   DBEngine:
     Type: String
     Default: aurora-postgresql
     Description: Type of database to run. Suggested postgres or aurora-postgresql
+
   DBStorageType:
     Type: String
     Default: gp2
     Description: Type of storage to run the database on (standard or gp2 are the usual options)
+
   DBName:
     Type: String
     Default: postgres
     Description: The name to be used for the database
+
   DBUsername:
     Type: String
     Default: postgres
     Description: Username to use with the database
+
   DBMinCapacity:
     Type: String
     Default: 0.5
     Description: Minimum capacity is 0.5
+
   DBMaxCapacity:
     Type: String
     Default: 1
     Description: Minimum capacity is 0.5
+
   # Networking Parameters
   PrivateSubnet1:
     Type: String
     Description: ARN for private subnet 1
+
   PrivateSubnet2:
     Type: String
     Description: ARN for private subnet 2
+
   PublicSubnet1:
     Type: String
     Description: ARN for public subnet 1
+
   PublicSubnet2:
     Type: String
     Description: ARN for public subnet 2
+
   DaemonSecurityGroup:
     Type: String
     Description: Security Group ARN top use for the Daemon
+
   DagitSecurityGroup:
     Type: String
     Description: Security Group ARN top use for the Dagit Interface
+
   CodeServerSecurityGroup:
     Type: String
     Description: Security Group ARN top use for the Code Servers
+
 Resources:
   # ECS Definition
   TaskExecutionRole:
@@ -150,8 +187,10 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
   DagsterCluster:
     Type: AWS::ECS::Cluster
+
   DagsterDaemonTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -190,6 +229,7 @@ Resources:
               Value: !Ref DBPassword
             - Name: DAGSTER_POSTGRES_DB
               Value: !Ref DBName
+
   DagitTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -231,6 +271,7 @@ Resources:
               Value: !Ref DBPassword
             - Name: DAGSTER_POSTGRES_DB
               Value: !Ref DBName
+
   CodeServerTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -268,19 +309,23 @@ Resources:
               Value: !Ref CodeServerPipelineFolder
             - Name: REPO_LOCATION
               Value: !Ref CodeServerPipelineRepoLocation
+
   DagsterDaemonGroupDescription:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: "dagster-daemon-container"
+
   DagitGroupDescription:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: "dagit-container"
+
   UserCodeGroupDescription:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: "user-code-container"
-  DagsterDaemonService:
+
+  agsterDaemonService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, DagsterDaemonTaskDefinition ]
     Properties:
@@ -295,6 +340,7 @@ Resources:
             - !Ref PrivateSubnet2
           SecurityGroups:
             - !Ref DaemonSecurityGroup
+
   DagitService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, DagitTaskDefinition ]
@@ -310,6 +356,7 @@ Resources:
            - !Ref PrivateSubnet2
           SecurityGroups:
            - !Ref DagitSecurityGroup
+
   CodeServerService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, CodeServerTaskDefinition ]
@@ -344,6 +391,7 @@ Resources:
           Value: !Ref ProjectName
         - Key: Environment
           Value: !Ref Environment
+
   DagsterDatabaseInstance:
     Type: 'AWS::RDS::DBInstance'
     Properties:
@@ -355,6 +403,7 @@ Resources:
           Value: !Ref ProjectName
         - Key: Environment
           Value: !Ref Environment
+
   DBPassword:
     Type: AWS::SecretsManager::Secret
     Properties:

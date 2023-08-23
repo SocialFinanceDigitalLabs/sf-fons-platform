@@ -1,4 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
+Description:  This template creates the needed ECR repositories to be used to deploy to ECS/EC2
 
 Parameters:
   Environment:

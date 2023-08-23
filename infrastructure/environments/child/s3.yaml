@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  This template creates a bucket and the needed role to access it for ingress operations. This is the
+bucket which connects to the frontend
+
+Parameters:
+  Environment:
+    Type: String
+    Description: The name for the environment
+
+  AppName:
+    Type: String
+    Default: SFData
+    Description: The name for the application or instance
+
+  OrganisationName:
+    Type: String
+    Description: The name for the environment
+
+  AutoFileDeletion:
+    Type: String
+    Default: 2190
+    Description: How long before files are automatically deleted (default 6 years)
+
+  Origin:
+    Type: String
+    Default: "*"
+
+Resources:
+  IngestBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-ingress-${OrganisationName}-${Environment}"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+          Rules:
+            - Id: DeleteContentAfter1Day
+              ExpirationInDays: !Ref AutoFileDeletion
+              Status: 'Enabled'
+            - Id: AbortIncompleteMultipartUpload
+              NoncurrentVersionExpirationInDays: !Ref AutoFileDeletion
+              Status: 'Enabled'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+            AllowedOrigins:
+              - !Ref Origin
+            Id: IPSRule
+
+  StorageRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub "${AppName}-ingress-user-${OrganisationName}-${Environment}"
+      Description: "Role that allows a user to access the s3 Bucket"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: "${AppName}-ingress-user-access-${OrganisationName}-${Environment}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:DeleteObject"
+                Resource: !Sub "${IngestBucket.Arn}/*"
+
+Outputs:
+  BucketName:
+    Value: !Ref IngestBucket
+    Description: Name of the sample Amazon S3 bucket with a lifecycle configuration.
+  RoleARN:
+    Value: !GetAtt StorageRole.Arn
+    Description: ARN of the role to access the bucket
