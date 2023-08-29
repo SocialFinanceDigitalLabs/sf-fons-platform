@@ -12,6 +12,9 @@ Parameters:
     Description: The name for the environment. Expected values are dev, staging, prod
 
   # ECS Parameters
+  GuardDutyEmail:
+    Type: String
+    Description: E-mail address to use to receive notifications from the IDS system
   DaemonCpu:
     Type: String
     Default: 256
@@ -147,6 +150,116 @@ Conditions:
   IsProd: !Equals [!Ref Environment, "prod"]
 
 Resources:
+  # IDS System
+  SQSQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: Fons-IDS
+      DelaySeconds: 0
+      ReceiveMessageWaitTimeSeconds: 0
+      VisibilityTimeout: 30
+
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref GuardDutySNSTopic
+      Endpoint: !Ref GuardDutyEmail
+
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: ONE_HOUR
+
+  GuardDutySNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: guardduty-event-topic
+      TopicName: guardduty-event-topic
+      Subscription:
+        - Endpoint: !Join
+            - ':'
+            - - 'arn:aws:sqs'
+              - !Ref 'AWS::Region'
+              - !Ref 'AWS::AccountId'
+              - !Ref SQSQueue
+          Protocol: sqs
+
+  GuardDutySNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Id: Id1
+        Statement:
+          - Sid: Sid1
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'sns:Publish'
+            Resource: !Join
+              - ':'
+              - - 'arn:aws:sns'
+                - !Ref 'AWS::Region'
+                - !Ref 'AWS::AccountId'
+                - 'guardduty-event-topic'
+      Topics:
+        - !Ref GuardDutySNSTopic
+
+  MySNSToSQSPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sqs.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref GuardDutySNSTopic
+      Topics:
+        - Ref: GuardDutySNSTopic
+
+  SQSQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Id: SQSQueuePolicy
+        Statement:
+          - Sid: Allow-SendMessage-To-Queue-From-SNS-Topic
+            Effect: Allow
+            Principal: '*'
+            Action:
+              - 'sqs:SendMessage'
+            Resource: '*'
+            Condition:
+              ArnEquals:
+                'aws:SourceArn': !Ref GuardDutySNSTopic
+      Queues:
+        - !Ref SQSQueue
+    DependsOn: GuardDutySNSTopic
+
+  GuardDutyEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.guardduty
+      Name: guardduty-event-rule
+      State: ENABLED
+      Targets:
+        - Arn: !Join
+            - ':'
+            - - 'arn:aws:sns'
+              - !Ref 'AWS::Region'
+              - !Ref 'AWS::AccountId'
+              - guardduty-event-topic
+          Id: 20190702
+    DependsOn: GuardDutySNSTopic
+
+
   # ECS Definition
   DagitTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -546,8 +659,4 @@ Resources:
 Outputs:
   DatabaseEndpointAddress:
     Description: Endpoint Address for the Database
-<<<<<<< HEAD
     Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
-=======
-    Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
->>>>>>> 1ef8c9af24107d2ea1e57f99bd5c563ae00483e8
