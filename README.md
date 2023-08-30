@@ -13,3 +13,7 @@ doesn't rely on this.
       1. Images are pushed to ECR repos, and then spun up on ECS
       2. Files, such as pipeline code, are stored on cloud storage (such as S3) and synced in with dagster. A a separate 
       pipeline will accomplish this deployment.
+
+
+## Infrastructure
+Documentation on the infrastructure can be found [here](./docs/infrastructure-diagrams/README.md)
