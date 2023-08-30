@@ -1,0 +1,238 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  |
+  This template creates buckets to be used by the application for the storage of data and sharing the data
+  with the central organisation.
+
+Parameters:
+  Environment:
+    Type: String
+    Description: The name for the environment (e.g. dev, staging, prod). LOWER CASE, NO SPACES
+
+  AppName:
+    Type: String
+    Default: sfdata
+    Description: The name for the application or instance.  LOWER CASE, NO SPACES
+
+  OrganisationName:
+    Type: String
+    Description: The name for the organisation this is for (to make sure naming is unique). LOWER CASE, NO SPACES
+
+  AutoFileDeletion:
+    Type: String
+    Default: 2190
+    Description: How long before files are automatically deleted (default 6 years)
+
+  WebsiteConnectionOriginUrl:
+    Type: String
+    Default: "*"
+    Description: |
+      Url of the website that will be accessing this bucket (e.g. from a frontend implementation). Connection
+      is only allowed from an ec2/ecs reousrce on the same account.
+
+  OrgUserAccountArn:
+    Type: String
+    Description: ARN of the organisation user who can access this bucket
+
+  EnableCrossAccountAccess:
+    Type: String
+    AllowedValues: [ true, false ]
+    Default: true
+    Description: Enable cross-account access to the shared S3 bucket
+
+Conditions:
+  EnableCrossAccountAccessCondition:
+    Fn::Equals:
+      - Ref: EnableCrossAccountAccess
+      - true
+
+Resources:
+  DataStoreBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-data-store-${OrganisationName}-${Environment}"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+          Rules:
+            - Id: AutoDeleteContent
+              ExpirationInDays: !Ref AutoFileDeletion
+              Status: 'Enabled'
+            - Id: AbortIncompleteMultipartUpload
+              NoncurrentVersionExpirationInDays: !Ref AutoFileDeletion
+              Status: 'Enabled'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+            AllowedOrigins:
+              - !Ref WebsiteConnectionOriginUrl
+            Id: DataStoreRule
+
+  WorkspaceBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-workspace-${OrganisationName}-${Environment}"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+          Rules:
+            - Id: DeleteContentAfter1Day
+              ExpirationInDays: !Ref AutoFileDeletion
+              Status: 'Enabled'
+            - Id: AbortIncompleteMultipartUpload
+              NoncurrentVersionExpirationInDays: !Ref AutoFileDeletion
+              Status: 'Enabled'
+
+
+  SharedBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-shared-${OrganisationName}-${Environment}"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+          Rules:
+            - Id: DeleteContentAfter1Day
+              ExpirationInDays: !Ref AutoFileDeletion
+              Status: 'Enabled'
+            - Id: AbortIncompleteMultipartUpload
+              NoncurrentVersionExpirationInDays: !Ref AutoFileDeletion
+              Status: 'Enabled'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+            AllowedOrigins:
+              - !Ref WebsiteConnectionOriginUrl
+            Id: SharedRule
+
+  SharedBucketAccessPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SharedBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Ref OrgUserAccountArn
+            Action: "s3:GetObject"
+            Resource: !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
+
+  DataStoreStorageRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub "${AppName}-data-store-user-${OrganisationName}-${Environment}"
+      Description: "Role that allows a user to access the data store s3 Bucket"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub "${AppName}-data-store-user-access-${OrganisationName}-${Environment}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:DeleteObject"
+                Resource: !Sub "${DataStoreBucket.Arn}/*"
+
+  WorkspaceStorageRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub "${AppName}-workspace-user-${OrganisationName}-${Environment}"
+      Description: "Role that allows a user to access the workspace store s3 Bucket"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub "${AppName}-workspace-user-access-${OrganisationName}-${Environment}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:DeleteObject"
+                Resource: !Sub "${WorkspaceBucket.Arn}/*"
+
+  SharedStorageRole:
+    Type: 'AWS::IAM::Role'
+    Condition: EnableCrossAccountAccessCondition
+    Properties:
+      RoleName: !Sub "${AppName}-shared-user-${OrganisationName}-${Environment}"
+      Description: "Role that allows a user to access the workspace store s3 Bucket"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub "${AppName}-shared-user-access-${OrganisationName}-${Environment}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:DeleteObject"
+                Resource: !Sub "${SharedBucket.Arn}/*"
+
+Outputs:
+  DataStoreBucketName:
+    Value: !Ref DataStoreBucket
+    Description: Name of the sample Amazon S3 bucket with a lifecycle configuration.
+  DataStoreRoleARN:
+    Value: !GetAtt DataStoreStorageRole.Arn
+    Description: ARN of the role used to access the data store bucket
+  WorkspaceBucketName:
+    Value: !Ref WorkspaceBucket
+    Description: Name of the sample Amazon S3 bucket with a lifecycle configuration.
+  WorkspaceRoleARN:
+    Value: !GetAtt WorkspaceStorageRole.Arn
+    Description: ARN of the role used to access the data store bucket
+  SharedBucketName:
+    Value: !Ref SharedBucket
+    Description: Name of the sample Amazon S3 bucket with a lifecycle configuration.
+  SharedRoleARN:
+    Value: !GetAtt SharedStorageRole.Arn
+    Description: ARN of the role used to access the data store bucket

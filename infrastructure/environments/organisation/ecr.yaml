@@ -1,4 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
+Description:  This template creates the needed ECR repositories to be used to deploy to ECS/EC2
 
 Parameters:
   Environment:
@@ -26,37 +27,13 @@ Resources:
                   - "ecr:PutImage"
                   - "ecr:UploadLayerPart"
                 Resource:
-                  - !Sub "${DagsterDagit.Arn}/*"
-                  - !Sub "${DagsterDaemon.Arn}/*"
+                  - !Sub "${CodeServer.Arn}/*"
   RepoUserAccessKey:
     Type: 'AWS::IAM::AccessKey'
     Properties:
       UserName:
         !Ref RepoUser
-  DagsterDagit:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Sub "dagit-${Environment}"
-      ImageScanningConfiguration:
-        ScanOnPush: true
-      RepositoryPolicyText:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: AllowPushPull
-            Effect: Allow
-            Principal:
-              AWS:
-                - !GetAtt RepoUser.Arn
-            Action:
-                - "ecr:BatchCheckLayerAvailability"
-                - "ecr:BatchGetImage"
-                - "ecr:CompleteLayerUpload"
-                - "ecr:GetDownloadUrlForLayer"
-                - "ecr:GetLifecyclePolicy"
-                - "ecr:InitiateLayerUpload"
-                - "ecr:PutImage"
-                - "ecr:UploadLayerPart"
-  DagsterDaemon:
+  CodeServer:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: !Sub "dagit-${Environment}"
