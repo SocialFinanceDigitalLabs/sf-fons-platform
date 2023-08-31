@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  This template creates the needed ECR repositories to be used to deploy to ECS/EC2
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: fons
+    Description: Name of the platform. Used to name things like database, etc. LOWER CASE, NO SPACES
+  Environment:
+    Type: String
+    Default: staging, LOWER CASE, NO SPACES
+  CodeServerECRAccessRoles:
+    Type: CommaDelimitedList
+    Description: List of Role ARNs from other accounts that are allowed to access the Code Server Repo
+  DagsterECRAccessRoles:
+    Type: CommaDelimitedList
+    Description: List of Role ARNs from other accounts that are allowed to access the Dagster Repo
+  FrontendECRAccessRoles:
+    Type: CommaDelimitedList
+    Description: List of Role ARNs from other accounts that are allowed to access the Frontend Repo
+
+
+Resources:
+  RepoUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub "ecr-cicd-user-${Environment}"
+      Policies:
+        - PolicyName: "inlineECRAccessPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:BatchGetImage"
+                  - "ecr:CompleteLayerUpload"
+                  - "ecr:GetDownloadUrlForLayer"
+                  - "ecr:GetLifecyclePolicy"
+                  - "ecr:InitiateLayerUpload"
+                  - "ecr:PutImage"
+                  - "ecr:UploadLayerPart"
+                Resource:
+                  - !Sub "${CodeServerRepo.Arn}/*"
+                  - !Sub "${DagsterRepo.Arn}/*"
+                  - !Sub "${FrontendRepo.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                Resource:
+                  - "*"
+  RepoUserAccessKey:
+    Type: 'AWS::IAM::AccessKey'
+    Properties:
+      UserName: !Ref RepoUser
+  CodeServerRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}-code-server-${Environment}"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CodeServerAllowPushPull
+            Effect: Allow
+            Principal:
+              AWS: !Ref CodeServerECRAccessRoles
+            Action:
+                - "ecr:BatchCheckLayerAvailability"
+                - "ecr:BatchGetImage"
+                - "ecr:CompleteLayerUpload"
+                - "ecr:GetDownloadUrlForLayer"
+                - "ecr:GetLifecyclePolicy"
+                - "ecr:InitiateLayerUpload"
+                - "ecr:PutImage"
+                - "ecr:UploadLayerPart"
+
+  DagsterRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}-dagster-${Environment}"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CodeServerAllowPushPull
+            Effect: Allow
+            Principal:
+              AWS: !Ref DagsterECRAccessRoles
+            Action:
+                - "ecr:BatchCheckLayerAvailability"
+                - "ecr:BatchGetImage"
+                - "ecr:CompleteLayerUpload"
+                - "ecr:GetDownloadUrlForLayer"
+                - "ecr:GetLifecyclePolicy"
+                - "ecr:InitiateLayerUpload"
+                - "ecr:PutImage"
+                - "ecr:UploadLayerPart"
+
+  FrontendRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${ProjectName}-frontend-${Environment}"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CodeServerAllowPushPull
+            Effect: Allow
+            Principal:
+              AWS: !Ref FrontendECRAccessRoles
+            Action:
+                - "ecr:BatchCheckLayerAvailability"
+                - "ecr:BatchGetImage"
+                - "ecr:CompleteLayerUpload"
+                - "ecr:GetDownloadUrlForLayer"
+                - "ecr:GetLifecyclePolicy"
+                - "ecr:InitiateLayerUpload"
+                - "ecr:PutImage"
+                - "ecr:UploadLayerPart"
+Outputs:
+  AccessKey:
+    Value: !Ref RepoUserAccessKey
+  SecretAccessKey:
+    Value: !GetAtt RepoUserAccessKey.SecretAccessKey
+  CodeServerRepoUri:
+    Value: !GetAtt CodeServerRepo.RepositoryUri
+  DagsterRepoUri:
+    Value: !GetAtt DagsterRepo.RepositoryUri
+  FrontendRepoUri:
+    Value: !GetAtt FrontendRepo.RepositoryUri
+
