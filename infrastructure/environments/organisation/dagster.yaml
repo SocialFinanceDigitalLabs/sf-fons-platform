@@ -1,4 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
+Description: This template creates the ECS services used for the Dagster service and pipelines
 Parameters:
   # Project-level Parameters
   ProjectName:

@@ -451,4 +451,4 @@ Outputs:
 
   PrivateServiceDiscoveryNamespace:
     Description: Name of the Namespace for private service discovery. To be used for Service Connect for ECS
-    Value: !GetAtt PrivateServiceDiscoveryNamespace.Name
+    Value: !GetAtt PrivateServiceDiscoveryNamespace.Id
