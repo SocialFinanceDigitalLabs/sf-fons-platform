@@ -74,10 +74,10 @@ Parameters:
     Description: Location of the repo.py file that controls the repository
   InputLocation:
     Type: String
-    Description: The standard location to look for files to ingest into the pipelines
+    Description: The standard location to look for files to ingest into the pipelines. For s3, this must be a ROOT path, no folders
   OutputLocation:
     Type: String
-    Description: The standard output location for pipeline files
+    Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
 
   # Database Parameters
   DBStorageSize:
@@ -181,6 +181,26 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DagitTaskHandling
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecs:RunTask"
+                  - "ecs:StartTask"
+                  - "ecs:StopTask"
+                  - "ecs:DescribeTasks"
+                  - "ecs:DescribeTaskDefinition"
+                Resource:
+                  - !Sub "arn:aws:ecs:*:${AWS::AccountId}:task/*/*"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/CodeServerTask:*"
+              - Effect: Allow
+                Action:
+                  - "ecs:DescribeTaskDefinition"
+                Resource:
+                  - "*"
       ManagedPolicyArns:        # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
@@ -363,6 +383,9 @@ Resources:
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
               Value: !Ref DBPort
+            - Name: DAGSTER_CODE_SERVER_TASK
+              Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
+
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -404,6 +427,16 @@ Resources:
               Value: !Ref OutputLocation
             - Name: INCOMING_LOCATION
               Value: !Ref InputLocation
+            - Name: DAGSTER_POSTGRES_HOST
+              Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
+            - Name: DAGSTER_POSTGRES_USER
+              Value: !Ref DBUsername
+            - Name: DAGSTER_POSTGRES_PASSWORD
+              Value: !Ref DBPassword
+            - Name: DAGSTER_POSTGRES_DB
+              Value: !Ref DBName
+            - Name: DAGSTER_POSTGRES_PORT
+              Value: !Ref DBPort
       Tags:
         - Key: Project
           Value: !Ref ProjectName
