@@ -164,10 +164,26 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DagitTaskExecutionSSM
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:GetParameters"
+                  - "secretsmanager:GetSecretValue"
+                Resource:
+                  - !Sub "arn:aws:ecs:*:${AWS::AccountId}:task/*/*"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/CodeServerTask:*"
+              - Effect: Allow
+                Action:
+                  - "ecs:DescribeTaskDefinition"
+                Resource:
+                  - "*"
       ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
-        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
 

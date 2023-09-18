@@ -73,7 +73,7 @@ Resources:
           ProviderName: !GetAtt CognitoUserPool.ProviderName
       AllowUnauthenticatedIdentities: false
       OpenIdConnectProviderARNs:
-        - "arn:aws:oidc:${AwsRegion}:${AWS::AccountId}:${CognitoUserPool}"
+        - "arn:aws:oidc:${AWS::Region}:${AWS::AccountId}:${CognitoUserPool}"
 
 Outputs:
   IdentifierEntitiyId:

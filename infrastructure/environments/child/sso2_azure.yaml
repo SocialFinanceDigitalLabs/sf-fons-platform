@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  Connects Identity Pool to Azure
+
+Parameters:
+  SAMLMetadataURL:
+    Description: The SAML Metadata URL used for the Azure SSO application
+    Type: String
+  UserPoolId:
+    Description: The User Pool Id to use
+    Type: String
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+  ApplicationName:
+    Description: The name of the application (No Spaces)
+    Type: String
+  CallbackUrl:
+    Description: The URL of the web application that will receive the auth code (https)
+    Type: String
+
+Resources:
+  UserPoolIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref UserPoolId
+      ProviderName: !Sub "${ApplicationName}-AzureADProvider-${EnvironmentName}"
+      ProviderDetails:
+        MetadataURL: !Ref SAMLMetadataURL
+      ProviderType: "SAML"
+      AttributeMapping:
+        mail: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress
+        givenname: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname
+        userprincipalname: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name
+        surname: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname
+        groups: http://schemas.microsoft.com/ws/2008/06/identity/claims/groups
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPoolId
+      ClientName: !Sub "${ApplicationName}-cognito-client-${EnvironmentName}"
+      CallbackURLs:
+        - !Ref CallbackUrl
+      AllowedOAuthFlows:
+        - "code"
+      AllowedOAuthScopes:
+        - "openid"
+        - "email"
+      SupportedIdentityProviders:
+        - !Sub "${ApplicationName}-AzureADProvider-${EnvironmentName}"
+      AllowedOAuthFlowsUserPoolClient: true
+
+Outputs:
+  CongitoClientId:
+    Description: The Cognito Client ID
+    Value: !Ref UserPoolClient
