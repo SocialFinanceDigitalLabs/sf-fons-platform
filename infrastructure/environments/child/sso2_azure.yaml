@@ -14,6 +14,9 @@ Parameters:
   ApplicationName:
     Description: The name of the application (No Spaces)
     Type: String
+  OrganisationName:
+    Description: The name of the organisation or la (No Spaces)
+    Type: String
   CallbackUrl:
     Description: The URL of the web application that will receive the auth code (https)
     Type: String
@@ -23,30 +26,32 @@ Resources:
     Type: AWS::Cognito::UserPoolIdentityProvider
     Properties:
       UserPoolId: !Ref UserPoolId
-      ProviderName: !Sub "${ApplicationName}-AzureADProvider-${EnvironmentName}"
+      ProviderName: !Sub "${ApplicationName}-${OrganisationName}-AzureADProvider-${EnvironmentName}"
       ProviderDetails:
         MetadataURL: !Ref SAMLMetadataURL
       ProviderType: "SAML"
       AttributeMapping:
-        mail: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress
-        givenname: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname
-        userprincipalname: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name
-        surname: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname
-        groups: http://schemas.microsoft.com/ws/2008/06/identity/claims/groups
+        email: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress
+        given_name: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname
+        custom:userprincipalname: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name
+        family_name: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname
+        custom:groups: http://schemas.microsoft.com/ws/2008/06/identity/claims/groups
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
       UserPoolId: !Ref UserPoolId
-      ClientName: !Sub "${ApplicationName}-cognito-client-${EnvironmentName}"
+      ClientName: !Sub "${ApplicationName}-${OrganisationName}-cognito-client-${EnvironmentName}"
       CallbackURLs:
         - !Ref CallbackUrl
       AllowedOAuthFlows:
         - "code"
+        - "implicit"
       AllowedOAuthScopes:
         - "openid"
         - "email"
+        - "aws.cognito.signin.user.admin"
       SupportedIdentityProviders:
-        - !Sub "${ApplicationName}-AzureADProvider-${EnvironmentName}"
+        - !Sub "${ApplicationName}-${OrganisationName}-AzureADProvider-${EnvironmentName}"
       AllowedOAuthFlowsUserPoolClient: true
 
 Outputs:

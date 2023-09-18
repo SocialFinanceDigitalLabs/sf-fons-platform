@@ -19,10 +19,6 @@ Parameters:
   LogoutURL:
     Description: The logout URL from the identity provider
     Type: String
-  AwsRegion:
-    Description: The region to use for the resources
-    Default: eu-west-2
-    Type: String
 
 Resources:
   CognitoUserPool:
@@ -61,7 +57,7 @@ Resources:
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
-      Domain: !Sub "${ApplicationName}-${OrganisationName}-${EnvironmentName}"  # Might need to be "${ApplicationName}-${EnvironmentName}.auth.${AwsRegion}.amazoncognito.com"
+      Domain: !Sub "${ApplicationName}-${OrganisationName}-${EnvironmentName}"  # Might need to be "${ApplicationName}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com"
       UserPoolId: !Ref CognitoUserPool
 
   CognitoIdentityPool:
