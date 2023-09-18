@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description:  This template creates the identity provision for the service, and can connect to an identity provider
-such as Azure or GCP
+Description:  |
+  This template creates the identity provision for the service, and can connect to an identity provider
+  such as Azure or GCP
 
 Parameters:
   EnvironmentName:
@@ -9,26 +10,23 @@ Parameters:
   ApplicationName:
     Description: The name of the application (No Spaces)
     Type: String
+  OrganisationName:
+    Description: The name of the organisation or la (No Spaces)
+    Type: String
   CallbackURL:
     Description: The callback URL from the identity provider
     Type: String
   LogoutURL:
     Description: The logout URL from the identity provider
     Type: String
-  AwsRegion:
-    Description: The region to use for the resources
-    Default: eu-west-2
-    Type: String
 
 Resources:
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub "${ApplicationName}-User-Pool-${EnvironmentName}"
+      UserPoolName: !Sub "${ApplicationName}-${OrganisationName}-User-Pool-${EnvironmentName}"
       AutoVerifiedAttributes:
         - email
-      EmailVerificationSubject: Verify your email
-      EmailVerificationMessage: Please click the link below to verify your email address.
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -36,11 +34,12 @@ Resources:
           RequireNumbers: true
           RequireUppercase: true
           RequireSymbols: true
-
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_LINK
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Sub "${ApplicationName}-App-Client-${EnvironmentName}"
+      ClientName: !Sub "${ApplicationName}-${OrganisationName}-App-Client-${EnvironmentName}"
       UserPoolId: !Ref CognitoUserPool
       GenerateSecret: true
       AllowedOAuthFlows:
@@ -55,11 +54,10 @@ Resources:
       CallbackURLs:
         - !Ref CallbackURL
 
-
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
-      Domain: !Sub "${ApplicationName}-${EnvironmentName}"  # Might need to be "${ApplicationName}-${EnvironmentName}.auth.${AwsRegion}.amazoncognito.com"
+      Domain: !Sub "${ApplicationName}-${OrganisationName}-${EnvironmentName}"  # Might need to be "${ApplicationName}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com"
       UserPoolId: !Ref CognitoUserPool
 
   CognitoIdentityPool:
@@ -71,17 +69,10 @@ Resources:
           ProviderName: !GetAtt CognitoUserPool.ProviderName
       AllowUnauthenticatedIdentities: false
       OpenIdConnectProviderARNs:
-        - "arn:aws:oidc:${AwsRegion}:${AWS::AccountId}:${CognitoUserPool}"
+        - "arn:aws:oidc:${AWS::Region}:${AWS::AccountId}:${CognitoUserPool}"
 
-  UserPoolIdentityProvider:
-    Type: AWS::Cognito::UserPoolIdentityProvider
-    Properties:
-      UserPoolId: !Ref CognitoUserPool
-      ProviderName: "Azure"
-      ProviderDetails:
-        MetadataURL: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
-      ProviderType: "SAML"
-      AttributeMapping:
-        email: "Attribute"
-      IdpIdentifiers:
-        - "IdpIdentifier"
+Outputs:
+  IdentifierEntitiyId:
+    Value: !Sub "urn:amazon:cognito:sp:${CognitoUserPool}"
+  ReplyURL:
+    Value: !Sub "https://${ApplicationName}-${OrganisationName}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com/saml2/idpresponse"
