@@ -102,7 +102,11 @@ Resources:
                   - "s3:PutObject"
                   - "s3:GetObject"
                   - "s3:DeleteObject"
-                Resource: !Sub "${DataStoreBucket.Arn}/*"
+                  - "s3:GetObjectAttributes"
+                  - "s3:GetObjectAcl"
+                Resource:
+                  - !Sub "${DataStoreBucket.Arn}/*"
+                  - !Sub "${DataStoreBucket.Arn}"
 
   WorkspaceStorageRole:
     Type: 'AWS::IAM::Role'
@@ -128,7 +132,11 @@ Resources:
                   - "s3:PutObject"
                   - "s3:GetObject"
                   - "s3:DeleteObject"
-                Resource: !Sub "${WorkspaceBucket.Arn}/*"
+                  - "s3:GetObjectAttributes"
+                  - "s3:GetObjectAcl"
+                Resource:
+                  - !Sub "${WorkspaceBucket.Arn}/*"
+                  - !Sub "${WorkspaceBucket.Arn}"
 
 Outputs:
   DataStoreBucketName:

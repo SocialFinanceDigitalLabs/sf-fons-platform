@@ -25,6 +25,8 @@ Resources:
     Type: AWS::IAM::User
     Properties:
       UserName: !Sub "ecr-cicd-user-${Environment}"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
       Policies:
         - PolicyName: "inlineECRAccessPolicy"
           PolicyDocument:

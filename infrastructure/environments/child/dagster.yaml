@@ -26,15 +26,15 @@ Parameters:
     Description: CPU to use for Code Server
   DaemonMemory:
     Type: String
-    Default: 512
+    Default: 1024
     Description: Memory to use for Daemon
   DagitMemory:
     Type: String
-    Default: 512
+    Default: 1024
     Description: Memory to use for Dagit
   CodeServerMemory:
     Type: String
-    Default: 512
+    Default: 1024
     Description: CPU to use for the Code Server
   DaemonImagePath:
     Type: String
@@ -72,6 +72,12 @@ Parameters:
     Type: String
     Default: "repository.py"
     Description: Location of the repo.py file that controls the repository
+  InputLocation:
+    Type: String
+    Description: The standard location to look for files to ingest into the pipelines. For s3, this must be a ROOT path, no folders
+  OutputLocation:
+    Type: String
+    Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
 
   # Database Parameters
   DBStorageSize:
@@ -158,10 +164,26 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
+      Policies:
+        - PolicyName: DagitTaskExecutionSSM
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:GetParameters"
+                  - "secretsmanager:GetSecretValue"
+                Resource:
+                  - !Sub "arn:aws:ecs:*:${AWS::AccountId}:task/*/*"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/CodeServerTask:*"
+              - Effect: Allow
+                Action:
+                  - "ecs:DescribeTaskDefinition"
+                Resource:
+                  - "*"
+      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
-        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
 
@@ -175,11 +197,32 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
+      Policies:
+        - PolicyName: DagitTaskHandling
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecs:RunTask"
+                  - "ecs:StartTask"
+                  - "ecs:StopTask"
+                  - "ecs:DescribeTasks"
+                  - "ecs:DescribeTaskDefinition"
+                Resource:
+                  - !Sub "arn:aws:ecs:*:${AWS::AccountId}:task/*/*"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/CodeServerTask:*"
+              - Effect: Allow
+                Action:
+                  - "ecs:DescribeTaskDefinition"
+                Resource:
+                  - "*"
+      ManagedPolicyArns:        # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   DaemonTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -191,7 +234,7 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
+      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
@@ -208,11 +251,12 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
+      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   CodeServerTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -224,7 +268,7 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
+      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
@@ -241,11 +285,12 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
+      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   DagsterCluster:
     Type: AWS::ECS::Cluster
@@ -300,6 +345,10 @@ Resources:
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
               Value: !Ref DBPort
+            - Name: OUTPUT_LOCATION
+              Value: !Ref OutputLocation
+            - Name: INCOMING_LOCATION
+              Value: !Ref InputLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -350,6 +399,9 @@ Resources:
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
               Value: !Ref DBPort
+            - Name: DAGSTER_CODE_SERVER_TASK
+              Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
+
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -387,6 +439,20 @@ Resources:
               Value: !Ref CodeServerPipelineFolder
             - Name: REPO_LOCATION
               Value: !Ref CodeServerPipelineRepoLocation
+            - Name: OUTPUT_LOCATION
+              Value: !Ref OutputLocation
+            - Name: INCOMING_LOCATION
+              Value: !Ref InputLocation
+            - Name: DAGSTER_POSTGRES_HOST
+              Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
+            - Name: DAGSTER_POSTGRES_USER
+              Value: !Ref DBUsername
+            - Name: DAGSTER_POSTGRES_PASSWORD
+              Value: !Ref DBPassword
+            - Name: DAGSTER_POSTGRES_DB
+              Value: !Ref DBName
+            - Name: DAGSTER_POSTGRES_PORT
+              Value: !Ref DBPort
       Tags:
         - Key: Project
           Value: !Ref ProjectName

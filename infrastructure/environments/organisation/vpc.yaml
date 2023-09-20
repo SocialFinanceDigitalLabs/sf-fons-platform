@@ -64,6 +64,14 @@ Parameters:
     Default: 3306
     Description: Port to connect to the database
 
+  DataStoreBucket:
+    Type: String
+    Description: Arn of the Data store s3 bucket
+
+  WorkspaceBucket:
+    Type: String
+    Description: Arn of the Workspace s3 bucket
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -263,9 +271,21 @@ Resources:
           - Effect: Allow
             Principal: '*'
             Action:
+              - 's3:DeleteObject'
               - 's3:GetObject'
+              - 's3:PutObject'
             Resource:
-              - '*'  #To Add Later: S3 ARNS
+              - !Ref DataStoreBucket
+              - !Ref WorkspaceBucket
+              - !Sub "{DataStoreBucket}/*"
+              - !Sub "{WorkspaceBucket}/*"
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - 's3:ListBucket'
+            Resource:
+              - !Ref DataStoreBucket
+              - !Ref WorkspaceBucket
       RouteTableIds:
         - !Ref PrivateRouteTable1
         - !Ref PrivateRouteTable2
