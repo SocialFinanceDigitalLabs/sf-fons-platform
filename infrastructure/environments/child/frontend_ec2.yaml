@@ -277,6 +277,7 @@ Resources:
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 
   # Attach the IAM Role to the EC2 instance
   FrontendEC2InstanceProfile:
