@@ -5,6 +5,10 @@ Parameters:
     Type: String
     Default: Dagster
     Description: Name of the platform. Used to name things like database, etc.
+  OrganisationName:
+    Type: String
+    Default: org
+    Description: The name of the council, authority, or organisation this is for
 
   # Environment Parameters
   Environment:
@@ -74,7 +78,9 @@ Parameters:
     Description: Location of the repo.py file that controls the repository
   InputLocation:
     Type: String
-    Description: The standard location to look for files to ingest into the pipelines. For s3, this must be a ROOT path, no folders
+    Description: |
+      The standard location to look for files to ingest into the pipelines. For s3, this must be a ROOT path, no folders
+      Example: s3://my-bucket-name
   OutputLocation:
     Type: String
     Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
@@ -145,14 +151,34 @@ Parameters:
   DatabaseSecurityGroup:
     Type: String
     Description: Security Group ARN to use for the Database
-  MyPrivateServiceDiscoveryNamespace:
+  PrivateServiceDiscoveryNamespace:
     Type: String
     Description: Namespace for private network.
+    Default: fons-namespace.local
 
 Conditions:
   IsProd: !Equals [!Ref Environment, "prod"]
 
 Resources:
+  # Logging Configuration
+  DagitLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${ProjectName}-${OrganisationName}-Dagit-LogGroup-${Environment}"
+      RetentionInDays: 7
+
+  CodeServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${ProjectName}-${OrganisationName}-CodeServer-LogGroup-${Environment}"
+      RetentionInDays: 7
+
+  DaemonLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${ProjectName}-${OrganisationName}-Daemon-LogGroup-${Environment}"
+      RetentionInDays: 7
+
   # ECS Definition
   DagitTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -294,6 +320,8 @@ Resources:
 
   DagsterCluster:
     Type: AWS::ECS::Cluster
+    DependsOn:
+      - DagsterDatabaseCluster
     Properties:
       CapacityProviders:
         - FARGATE
@@ -306,6 +334,11 @@ Resources:
 
   DagsterDaemonTaskDefinition:
     Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - DaemonTaskExecutionRole
+      - DaemonTaskRole
+      - DaemonLogGroup
+      - DagsterDatabaseCluster
     Properties:
       Family: DagsterDaemonTask
       ExecutionRoleArn: !GetAtt DaemonTaskExecutionRole.Arn
@@ -328,7 +361,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: "dagster-daemon-container"
+              awslogs-group: !Ref DaemonLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-create-group: true
               awslogs-stream-prefix: "dagster"
@@ -356,6 +389,11 @@ Resources:
           Value: !Ref Environment
 
   DagitTaskDefinition:
+    DependsOn:
+      - DagitTaskExecutionRole
+      - DagitTaskRole
+      - DagitLogGroup
+      - DagsterDatabaseCluster
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: DagitTask
@@ -384,7 +422,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: "dagit-container"
+              awslogs-group: !Ref DagitLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-create-group: true
               awslogs-stream-prefix: "dagit"
@@ -410,6 +448,11 @@ Resources:
 
   CodeServerTaskDefinition:
     Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - CodeServerTaskExecutionRole
+      - CodeServerTaskRole
+      - CodeServerLogGroup
+      - DagsterDatabaseCluster
     Properties:
       Family: CodeServerTask
       ExecutionRoleArn: !GetAtt CodeServerTaskExecutionRole.Arn
@@ -430,7 +473,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: "user-code-container"
+              awslogs-group: !Ref CodeServerLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-create-group: true
               awslogs-stream-prefix: "dagster-user-code"
@@ -459,21 +502,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  DagsterDaemonGroupDescription:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: "dagster-daemon-container"
-
-  DagitGroupDescription:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: "dagit-container"
-
-  UserCodeGroupDescription:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: "user-code-container"
-
   DagsterDaemonService:
     Type: AWS::ECS::Service
     DependsOn: [ DagsterCluster, DagsterDaemonTaskDefinition ]
@@ -491,7 +519,7 @@ Resources:
             - !Ref DaemonSecurityGroup
       ServiceConnectConfiguration:
         Enabled: true
-        Namespace: !Ref MyPrivateServiceDiscoveryNamespace
+        Namespace: !Ref PrivateServiceDiscoveryNamespace
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -516,7 +544,7 @@ Resources:
            - !Ref DagitSecurityGroup
       ServiceConnectConfiguration:
         Enabled: true
-        Namespace: !Ref MyPrivateServiceDiscoveryNamespace
+        Namespace: !Ref PrivateServiceDiscoveryNamespace
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -540,7 +568,7 @@ Resources:
             - !Ref CodeServerSecurityGroup
       ServiceConnectConfiguration:
         Enabled: true
-        Namespace: !Ref MyPrivateServiceDiscoveryNamespace
+        Namespace: !Ref PrivateServiceDiscoveryNamespace
         LogConfiguration:
           LogDriver: awslogs
           Options:
