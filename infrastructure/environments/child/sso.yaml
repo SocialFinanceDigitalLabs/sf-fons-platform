@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  |
+  This template creates the identity provision for the service, and can connect to an identity provider
+  such as Azure or GCP
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+  ApplicationName:
+    Description: The name of the application (No Spaces)
+    Type: String
+  OrganisationName:
+    Description: The name of the organisation or la (No Spaces)
+    Type: String
+
+Resources:
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${ApplicationName}-${OrganisationName}-User-Pool-${EnvironmentName}"
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireUppercase: true
+          RequireSymbols: true
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_LINK
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${ApplicationName}-${OrganisationName}-App-Client-${EnvironmentName}"
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: true
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "${ApplicationName}-${OrganisationName}-${EnvironmentName}"  # Might need to be "${ApplicationName}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com"
+      UserPoolId: !Ref CognitoUserPool
+
+  CognitoIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: MyIdentityPool
+      CognitoIdentityProviders:
+        - ClientId: !Ref CognitoUserPoolClient
+          ProviderName: !GetAtt CognitoUserPool.ProviderName
+      AllowUnauthenticatedIdentities: false
+      OpenIdConnectProviderARNs:
+        - "arn:aws:oidc:${AWS::Region}:${AWS::AccountId}:${CognitoUserPool}"
+
+Outputs:
+  IdentifierEntitiyId:
+    Value: !Sub "urn:amazon:cognito:sp:${CognitoUserPool}"
+  ReplyURL:
+    Value: !Sub "https://${ApplicationName}-${OrganisationName}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com/saml2/idpresponse"
