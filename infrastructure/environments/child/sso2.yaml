@@ -13,6 +13,12 @@ Parameters:
   OrganisationName:
     Description: The name of the organisation or la (No Spaces)
     Type: String
+  CallbackURL:
+    Description: The callback URL from the identity provider
+    Type: String
+  LogoutURL:
+    Description: The logout URL from the identity provider
+    Type: String
 
 Resources:
   CognitoUserPool:
@@ -36,6 +42,17 @@ Resources:
       ClientName: !Sub "${ApplicationName}-${OrganisationName}-App-Client-${EnvironmentName}"
       UserPoolId: !Ref CognitoUserPool
       GenerateSecret: true
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - email
+        - aws.cognito.signin.user.admin
+        - openid
+      LogoutURLs:
+        - !Ref LogoutURL
+      CallbackURLs:
+        - !Ref CallbackURL
 
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain

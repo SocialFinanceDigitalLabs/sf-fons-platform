@@ -93,6 +93,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref Environment
+        - Key: Function
+          Value: Dagster
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -334,7 +336,7 @@ Resources:
   PrivateServiceDiscoveryNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
-      Name: my-namespace.local
+      Name: fons-namespace.local
       Vpc: !Ref VPC
 
   DaemonSecurityGroup:
@@ -481,6 +483,6 @@ Outputs:
     Description: Subnet Group for the database
     Value: !Ref DatabaseSubnetGroup
 
-  PrivateServiceDiscoveryNamespace:
+  PrivateServiceDiscoveryNamespaceId:
     Description: Name of the Namespace for private service discovery. To be used for Service Connect for ECS
     Value: !GetAtt PrivateServiceDiscoveryNamespace.Id
