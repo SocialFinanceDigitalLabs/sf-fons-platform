@@ -367,12 +367,17 @@ Resources:
                   - ec2:DescribeInstances
                 Resource:
                   - "*"
-              - Effect: Allow
+              - Sid: AllowEC2DataStoreBucketAccess
+                Effect: Allow
                 Action:
-                  - "s3:*"
+                  - "s3:ListBucket"
+                  - "s3:PutObject"
+                  - "s3:PutObjectAcl"
+                  - "s3:GetObject"
                 Resource:
                   - !Sub "${DataStoreLocationArn}"
                   - !Sub "${DataStoreLocationArn}/*"
+
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
