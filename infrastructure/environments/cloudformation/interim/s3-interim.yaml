@@ -10,7 +10,7 @@ Parameters:
 
   AppName:
     Type: String
-    Default: fons
+    Default: sfdata
     Description: The name for the application or instance.  LOWER CASE, NO SPACES
 
   OrganisationName:
@@ -52,10 +52,8 @@ Resources:
           - AllowedHeaders:
               - '*'
             AllowedMethods:
-              - GET
               - POST
               - PUT
-              - DELETE
             AllowedOrigins:
               - !Ref WebsiteConnectionOriginUrl
             Id: DataStoreRule
@@ -78,6 +76,7 @@ Resources:
               NoncurrentVersionExpirationInDays: !Ref AutoFileDeletion
               Status: 'Enabled'
 
+
   DataStoreStorageRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -97,16 +96,22 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Effect: Allow
+              - Sid: AllowDataStoreBucketList
+                Effect: Allow
+                Action:
+                  - "s3:ListObjects"
+                  - "s3:ListBucket"
+                Resource:
+                  - !Sub "${DataStoreBucket.Arn}"
+              - Sid: AllowDataStoreBucketSync
+                Effect: Allow
                 Action:
                   - "s3:PutObject"
+                  - "s3:PutObjectAcl"
                   - "s3:GetObject"
                   - "s3:DeleteObject"
-                  - "s3:GetObjectAttributes"
-                  - "s3:GetObjectAcl"
                 Resource:
                   - !Sub "${DataStoreBucket.Arn}/*"
-                  - !Sub "${DataStoreBucket.Arn}"
 
   WorkspaceStorageRole:
     Type: 'AWS::IAM::Role'
@@ -132,11 +137,7 @@ Resources:
                   - "s3:PutObject"
                   - "s3:GetObject"
                   - "s3:DeleteObject"
-                  - "s3:GetObjectAttributes"
-                  - "s3:GetObjectAcl"
-                Resource:
-                  - !Sub "${WorkspaceBucket.Arn}/*"
-                  - !Sub "${WorkspaceBucket.Arn}"
+                Resource: !Sub "${WorkspaceBucket.Arn}/*"
 
 Outputs:
   DataStoreBucketName:

@@ -38,6 +38,7 @@ Resources:
         custom:groups: http://schemas.microsoft.com/ws/2008/06/identity/claims/groups
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
+    DependsOn: UserPoolIdentityProvider
     Properties:
       UserPoolId: !Ref UserPoolId
       ClientName: !Sub "${ApplicationName}-${OrganisationName}-cognito-client-${EnvironmentName}"
@@ -53,6 +54,17 @@ Resources:
       SupportedIdentityProviders:
         - !Sub "${ApplicationName}-${OrganisationName}-AzureADProvider-${EnvironmentName}"
       AllowedOAuthFlowsUserPoolClient: true
+      PreventUserExistenceErrors: ENABLED
+  CognitoIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: MyIdentityPool
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !Sub "cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}"
+      AllowUnauthenticatedIdentities: false
+      OpenIdConnectProviderARNs:
+        - "arn:aws:oidc:${AWS::Region}:${AWS::AccountId}:${UserPoolId}"
 
 Outputs:
   CongitoClientId:
