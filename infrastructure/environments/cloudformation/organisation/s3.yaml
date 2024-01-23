@@ -10,7 +10,7 @@ Parameters:
 
   AppName:
     Type: String
-    Default: fons
+    Default: sfdata
     Description: The name for the application or instance.  LOWER CASE, NO SPACES
 
   OrganisationName:
@@ -28,6 +28,22 @@ Parameters:
     Description: |
       Url of the website that will be accessing this bucket (e.g. from a frontend implementation). Connection
       is only allowed from an ec2/ecs reousrce on the same account.
+
+  OrgUserAccountArn:
+    Type: String
+    Description: ARN of the organisation user who can access this bucket
+
+  EnableCrossAccountAccess:
+    Type: String
+    AllowedValues: [ true, false ]
+    Default: true
+    Description: Enable cross-account access to the shared S3 bucket
+
+Conditions:
+  EnableCrossAccountAccessCondition:
+    Fn::Equals:
+      - Ref: EnableCrossAccountAccess
+      - true
 
 Resources:
   DataStoreBucket:
@@ -78,6 +94,37 @@ Resources:
               NoncurrentVersionExpirationInDays: !Ref AutoFileDeletion
               Status: 'Enabled'
 
+
+  SharedBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-shared-${OrganisationName}-${Environment}"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+          Rules:
+            - Id: DeleteContentAfter1Day
+              ExpirationInDays: !Ref AutoFileDeletion
+              Status: 'Enabled'
+            - Id: AbortIncompleteMultipartUpload
+              NoncurrentVersionExpirationInDays: !Ref AutoFileDeletion
+              Status: 'Enabled'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+            AllowedOrigins:
+              - !Ref WebsiteConnectionOriginUrl
+            Id: SharedRule
+
   DataStoreStorageRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -102,11 +149,7 @@ Resources:
                   - "s3:PutObject"
                   - "s3:GetObject"
                   - "s3:DeleteObject"
-                  - "s3:GetObjectAttributes"
-                  - "s3:GetObjectAcl"
-                Resource:
-                  - !Sub "${DataStoreBucket.Arn}/*"
-                  - !Sub "${DataStoreBucket.Arn}"
+                Resource: !Sub "${DataStoreBucket.Arn}/*"
 
   WorkspaceStorageRole:
     Type: 'AWS::IAM::Role'
@@ -132,11 +175,34 @@ Resources:
                   - "s3:PutObject"
                   - "s3:GetObject"
                   - "s3:DeleteObject"
-                  - "s3:GetObjectAttributes"
-                  - "s3:GetObjectAcl"
-                Resource:
-                  - !Sub "${WorkspaceBucket.Arn}/*"
-                  - !Sub "${WorkspaceBucket.Arn}"
+                Resource: !Sub "${WorkspaceBucket.Arn}/*"
+
+  SharedStorageRole:
+    Type: 'AWS::IAM::Role'
+    Condition: EnableCrossAccountAccessCondition
+    Properties:
+      RoleName: !Sub "${AppName}-shared-user-${OrganisationName}-${Environment}"
+      Description: "Role that allows a user to access the workspace store s3 Bucket"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub "${AppName}-shared-user-access-${OrganisationName}-${Environment}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:DeleteObject"
+                Resource: !Sub "${SharedBucket.Arn}/*"
 
 Outputs:
   DataStoreBucketName:
@@ -150,4 +216,10 @@ Outputs:
     Description: Name of the sample Amazon S3 bucket with a lifecycle configuration.
   WorkspaceRoleARN:
     Value: !GetAtt WorkspaceStorageRole.Arn
+    Description: ARN of the role used to access the data store bucket
+  SharedBucketName:
+    Value: !Ref SharedBucket
+    Description: Name of the sample Amazon S3 bucket with a lifecycle configuration.
+  SharedRoleARN:
+    Value: !GetAtt SharedStorageRole.Arn
     Description: ARN of the role used to access the data store bucket

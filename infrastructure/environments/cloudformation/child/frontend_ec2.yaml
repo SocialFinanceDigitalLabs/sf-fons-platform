@@ -1,0 +1,354 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Deploy a Django Docker container on EC2
+
+Parameters:
+  Environment:
+    Type: String
+    Default: staging
+    Description: The name for the environment. Expected values are dev, staging, prod
+  WebsiteUrl:
+    Type: String
+    Description: The URL of the platform
+  FrontendVpcCIDR:
+    Type: String
+    Default: 10.192.50.0/16
+    Description: CIDR rule to use for the front end vpc
+  ProjectName:
+    Type: String
+    Default: fons
+    Description: Name of the platform. Used to name things like database, etc.
+  OrganisationName:
+    Description: The name of the organisation or la
+    Type: String
+  FrontendLaunchType:
+    Type: String
+    Default: "FARGATE"
+    Description: Either FARGATE or EC2 type can be used
+  PublicSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.60.0/24
+  PublicSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.80.0/24
+  FrontendRepoUri:
+    Description: The ECR or Docker Repo server to pull the image from (e.g. 840503653997.dkr.ecr.eu-west-2.amazonaws.com)
+    Type: String
+  FrontendRepoName:
+    Description: The ECR or Docker Repo name to pull the image from (e.g. fons-frontend-staging)
+    Type: String
+  FrontendRepoVersion:
+    Description: The version of the repo image to pull (e.g. latest)
+    Type: String
+    Default: "latest"
+  FrontendCpu:
+    Type: String
+    Default: 256
+    Description: CPU to use for the Frontend
+  FrontendMemory:
+    Type: String
+    Default: 512
+    Description: Memory to use for the Frontend
+  DataStoreLocation:
+    Type: String
+    Description: Location the Frontend should look to save and load uploaded and processed files
+  DataStoreLocationArn:
+    Type: String
+    Description: Arn of the bucket which stores the uploaded and processed files
+  DagsterVpc:
+    Type: String
+    Description: ID of the VPC used by Dagster
+  SecretKey:
+    Type: String
+    Description: Secret Key to be used with Django setup
+  CognitoUserPoolId:
+    Type: String
+    Description: User Pool ID that handles SSO/Login
+  CognitoUserPoolArn:
+    Type: String
+    Description: User Pool Arn that handles SSO/Login
+  CognitoAppClientId:
+    Type: String
+    Description: The App Client Id in Cognito that links to the application
+  CognitoAppDomain:
+    Type: String
+    Description: The App Domain in Cognito that links to the setup.
+  FrontendEC2Image:
+    Type: String
+    Default: ami-06f4d01597a96dac8 #Amazon x86-64 linux is default
+    Description: AMI to use for application List found on EC2 Console here https://eu-west-2.console.aws.amazon.com/ec2/home?region=eu-west-2#AMICatalog
+  FonsSSLCertificateARN:
+    Type: String
+    Description: ARN From ACM of the SSL Certificate
+
+
+Resources:
+  FrontendKeyPair:
+    Type: 'AWS::EC2::KeyPair'
+    Properties:
+      KeyName: FrontendKeyPair
+
+  # EC2 instance
+  FrontendEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref FrontendEC2Image
+      InstanceType: t2.micro
+      KeyName: !Ref FrontendKeyPair
+      IamInstanceProfile: !Ref FrontendEC2InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum install -y docker
+          yum install -y amazon-cloudwatch-agent
+          service docker start
+          systemctl enable docker
+          usermod -a -G docker ec2-user
+          aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin ${FrontendRepoUri}
+          docker pull ${FrontendRepoUri}/${FrontendRepoName}:${FrontendRepoVersion}
+          docker run -d -p 0.0.0.0:80:8000 -e AWS_REGION=${AWS::Region} \
+              -e AWS_COGNITO_USER_POOL_ID=${CognitoUserPoolId} \
+              -e AWS_COGNITO_APP_CLIENT_ID=${CognitoAppClientId} \
+              -e AWS_COGNITO_DOMAIN=${CognitoAppDomain} \
+              -e DJANGO_SECRET_KEY=${SecretKey} \
+              -e SF_FS_BACKEND_URL=${DataStoreLocation} \ 
+              ${FrontendRepoUri}/${FrontendRepoName}:${FrontendRepoVersion}
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref FrontendSecurityGroup
+          SubnetId: !Ref FrontendPublicSubnet1
+
+  # Security Group
+  FrontendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "frontend-sg-${Environment}"
+      GroupDescription: Enable HTTP access
+      VpcId: !Ref FrontendVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0  # This allows HTTP traffic from anywhere
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0  # This allows HTTP traffic from anywhere
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  #VPC
+  FrontendVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref FrontendVpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref Environment
+
+  FrontendTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: FrontendTargetGroup
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref FrontendVpc
+      TargetType: instance
+      Targets:
+        - Id: !Ref FrontendEC2Instance
+
+  FrontendALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "frontend-alb-${Environment}"
+      Subnets:
+        - !Ref FrontendPublicSubnet1
+        - !Ref FrontendPublicSubnet2
+      SecurityGroups:
+        - !Ref FrontendSecurityGroup
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: 60
+
+  FrontendListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn:
+      - FrontendALB
+    Properties:
+      DefaultActions:
+        - RedirectConfig:
+            Host: "#{host}"
+            Path: "/#{path}"
+            Port: 443
+            Protocol: "HTTPS"
+            Query: "#{query}"
+            StatusCode: HTTP_301
+          Type: redirect
+      LoadBalancerArn: !Ref FrontendALB
+      Port: 80
+      Protocol: HTTP
+
+  FrontendHTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref FrontendTargetGroup
+                Weight: 1
+          Order: 1
+      LoadBalancerArn: !Ref FrontendALB
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-2016-08
+      Certificates:
+        - CertificateArn: !Ref FonsSSLCertificateARN
+
+  FrontendRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref FrontendVpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment} Frontend Routes
+
+  FrontendRoute:
+    Type: AWS::EC2::Route
+    DependsOn: FrontendInternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref FrontendRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref FrontendInternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref FrontendRouteTable
+      SubnetId: !Ref FrontendPublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref FrontendRouteTable
+      SubnetId: !Ref FrontendPublicSubnet2
+
+  FrontendInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref Environment
+        - Key: Function
+          Value: Frontend
+
+  FrontendInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref FrontendInternetGateway
+      VpcId: !Ref FrontendVpc
+
+  FrontendEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  FrontendEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref FrontendEC2Instance
+      EIP: !Ref FrontendEIP
+
+  FrontendPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FrontendVpc
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment} Public Subnet for Website (AZ1)
+
+  FrontendPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FrontendVpc
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment} Public Subnet for Website (AZ1)
+
+  # CloudWatch
+ # IAM Role for EC2
+  FrontendEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: FrontendEC2Role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: FrontendCloudWatchLogsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+        - PolicyName: FrontendEC2Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2-instance-connect:SendSSHPublicKey
+                Resource:
+                  - "*"
+                Condition:
+                  StringEquals:
+                    ec2:osuser: ec2-user
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                Resource:
+                  - "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess
+        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  # Attach the IAM Role to the EC2 instance
+  FrontendEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref FrontendEC2Role
+
+Outputs:
+  PublicIP:
+    Description: Public IP address of the EC2 instance
+    Value: !GetAtt FrontendEC2Instance.PublicIp

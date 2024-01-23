@@ -1,11 +1,14 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: This template creates the ECS services used for the Dagster service and pipelines
 Parameters:
   # Project-level Parameters
   ProjectName:
     Type: String
     Default: Dagster
     Description: Name of the platform. Used to name things like database, etc.
+  OrganisationName:
+    Type: String
+    Default: org
+    Description: The name of the council, authority, or organisation this is for
 
   # Environment Parameters
   Environment:
@@ -27,15 +30,15 @@ Parameters:
     Description: CPU to use for Code Server
   DaemonMemory:
     Type: String
-    Default: 512
+    Default: 1024
     Description: Memory to use for Daemon
   DagitMemory:
     Type: String
-    Default: 512
+    Default: 1024
     Description: Memory to use for Dagit
   CodeServerMemory:
     Type: String
-    Default: 512
+    Default: 1024
     Description: CPU to use for the Code Server
   DaemonImagePath:
     Type: String
@@ -73,6 +76,14 @@ Parameters:
     Type: String
     Default: "repository.py"
     Description: Location of the repo.py file that controls the repository
+  InputLocation:
+    Type: String
+    Description: |
+      The standard location to look for files to ingest into the pipelines. For s3, this must be a ROOT path, no folders
+      Example: s3://my-bucket-name
+  OutputLocation:
+    Type: String
+    Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
 
   # Database Parameters
   DBStorageSize:
@@ -140,14 +151,34 @@ Parameters:
   DatabaseSecurityGroup:
     Type: String
     Description: Security Group ARN to use for the Database
-  MyPrivateServiceDiscoveryNamespace:
+  PrivateServiceDiscoveryNamespace:
     Type: String
     Description: Namespace for private network.
+    Default: fons-namespace.local
 
 Conditions:
   IsProd: !Equals [!Ref Environment, "prod"]
 
 Resources:
+  # Logging Configuration
+  DagitLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${ProjectName}-${OrganisationName}-Dagit-LogGroup-${Environment}"
+      RetentionInDays: 7
+
+  CodeServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${ProjectName}-${OrganisationName}-CodeServer-LogGroup-${Environment}"
+      RetentionInDays: 7
+
+  DaemonLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${ProjectName}-${OrganisationName}-Daemon-LogGroup-${Environment}"
+      RetentionInDays: 7
+
   # ECS Definition
   DagitTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -159,12 +190,32 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:  # These need to be peared down for security reasons. What is necessary?
+      Policies:
+        - PolicyName: DagitTaskExecutionSSM
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:GetParameters"
+                  - "secretsmanager:GetSecretValue"
+                Resource:
+                  - !Sub "arn:aws:ecs:*:${AWS::AccountId}:task/*/*"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/CodeServerTask:*"
+              - Effect: Allow
+                Action:
+                  - "ecs:DescribeTaskDefinition"
+                Resource:
+                  - "*"
+      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
-        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonECS_FullAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/SecretsManagerReadWrite
 
   DagitTaskRole:
     Type: AWS::IAM::Role
@@ -176,11 +227,32 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:  # These need to be peared down for security reasons. What is necessary?
+      Policies:
+        - PolicyName: DagitTaskHandling
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecs:RunTask"
+                  - "ecs:StartTask"
+                  - "ecs:StopTask"
+                  - "ecs:DescribeTasks"
+                  - "ecs:DescribeTaskDefinition"
+                Resource:
+                  - !Sub "arn:aws:ecs:*:${AWS::AccountId}:task/*/*"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/CodeServerTask:*"
+              - Effect: Allow
+                Action:
+                  - "ecs:DescribeTaskDefinition"
+                Resource:
+                  - "*"
+      ManagedPolicyArns:        # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   DaemonTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -192,12 +264,15 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:  # These need to be peared down for security reasons. What is necessary?
+      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
-        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonECS_FullAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/SecretsManagerReadWrite
 
   DaemonTaskRole:
     Type: AWS::IAM::Role
@@ -209,11 +284,12 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:  # These need to be peared down for security reasons. What is necessary?
+      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   CodeServerTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -225,12 +301,15 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:  # These need to be peared down for security reasons. What is necessary?
+      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
-        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonECS_FullAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+        - arn:aws:iam::aws:policy/SecretsManagerReadWrite
 
   CodeServerTaskRole:
     Type: AWS::IAM::Role
@@ -242,14 +321,17 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:  # These need to be peared down for security reasons. What is necessary?
+      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   DagsterCluster:
     Type: AWS::ECS::Cluster
+    DependsOn:
+      - DagsterDatabaseCluster
     Properties:
       CapacityProviders:
         - FARGATE
@@ -262,6 +344,11 @@ Resources:
 
   DagsterDaemonTaskDefinition:
     Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - DaemonTaskExecutionRole
+      - DaemonTaskRole
+      - DaemonLogGroup
+      - DagsterDatabaseCluster
     Properties:
       Family: DagsterDaemonTask
       ExecutionRoleArn: !GetAtt DaemonTaskExecutionRole.Arn
@@ -284,7 +371,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: "dagster-daemon-container"
+              awslogs-group: !Ref DaemonLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-create-group: true
               awslogs-stream-prefix: "dagster"
@@ -301,6 +388,10 @@ Resources:
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
               Value: !Ref DBPort
+            - Name: OUTPUT_LOCATION
+              Value: !Ref OutputLocation
+            - Name: INCOMING_LOCATION
+              Value: !Ref InputLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -308,6 +399,11 @@ Resources:
           Value: !Ref Environment
 
   DagitTaskDefinition:
+    DependsOn:
+      - DagitTaskExecutionRole
+      - DagitTaskRole
+      - DagitLogGroup
+      - DagsterDatabaseCluster
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: DagitTask
@@ -336,7 +432,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: "dagit-container"
+              awslogs-group: !Ref DagitLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-create-group: true
               awslogs-stream-prefix: "dagit"
@@ -351,6 +447,9 @@ Resources:
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
               Value: !Ref DBPort
+            - Name: DAGSTER_CODE_SERVER_TASK
+              Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
+
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -359,6 +458,11 @@ Resources:
 
   CodeServerTaskDefinition:
     Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - CodeServerTaskExecutionRole
+      - CodeServerTaskRole
+      - CodeServerLogGroup
+      - DagsterDatabaseCluster
     Properties:
       Family: CodeServerTask
       ExecutionRoleArn: !GetAtt CodeServerTaskExecutionRole.Arn
@@ -379,7 +483,7 @@ Resources:
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: "user-code-container"
+              awslogs-group: !Ref CodeServerLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-create-group: true
               awslogs-stream-prefix: "dagster-user-code"
@@ -388,26 +492,25 @@ Resources:
               Value: !Ref CodeServerPipelineFolder
             - Name: REPO_LOCATION
               Value: !Ref CodeServerPipelineRepoLocation
+            - Name: OUTPUT_LOCATION
+              Value: !Ref OutputLocation
+            - Name: INCOMING_LOCATION
+              Value: !Ref InputLocation
+            - Name: DAGSTER_POSTGRES_HOST
+              Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
+            - Name: DAGSTER_POSTGRES_USER
+              Value: !Ref DBUsername
+            - Name: DAGSTER_POSTGRES_PASSWORD
+              Value: !Ref DBPassword
+            - Name: DAGSTER_POSTGRES_DB
+              Value: !Ref DBName
+            - Name: DAGSTER_POSTGRES_PORT
+              Value: !Ref DBPort
       Tags:
         - Key: Project
           Value: !Ref ProjectName
         - Key: Environment
           Value: !Ref Environment
-
-  DagsterDaemonGroupDescription:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: "dagster-daemon-container"
-
-  DagitGroupDescription:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: "dagit-container"
-
-  UserCodeGroupDescription:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: "user-code-container"
 
   DagsterDaemonService:
     Type: AWS::ECS::Service
@@ -426,7 +529,7 @@ Resources:
             - !Ref DaemonSecurityGroup
       ServiceConnectConfiguration:
         Enabled: true
-        Namespace: !Ref MyPrivateServiceDiscoveryNamespace
+        Namespace: !Ref PrivateServiceDiscoveryNamespace
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -451,7 +554,7 @@ Resources:
            - !Ref DagitSecurityGroup
       ServiceConnectConfiguration:
         Enabled: true
-        Namespace: !Ref MyPrivateServiceDiscoveryNamespace
+        Namespace: !Ref PrivateServiceDiscoveryNamespace
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -475,7 +578,7 @@ Resources:
             - !Ref CodeServerSecurityGroup
       ServiceConnectConfiguration:
         Enabled: true
-        Namespace: !Ref MyPrivateServiceDiscoveryNamespace
+        Namespace: !Ref PrivateServiceDiscoveryNamespace
         LogConfiguration:
           LogDriver: awslogs
           Options:
@@ -543,6 +646,9 @@ Resources:
         PasswordLength: 20
         RequireEachIncludedType: true
         ExcludeCharacters: "\"'@/\\"
+
+# Extra networking Pieces:
+
 
 Outputs:
   DatabaseEndpointAddress:

@@ -36,23 +36,6 @@ Resources:
           RequireSymbols: true
       VerificationMessageTemplate:
         DefaultEmailOption: CONFIRM_WITH_LINK
-  CognitoUserPoolClient:
-    Type: AWS::Cognito::UserPoolClient
-    Properties:
-      ClientName: !Sub "${ApplicationName}-${OrganisationName}-App-Client-${EnvironmentName}"
-      UserPoolId: !Ref CognitoUserPool
-      GenerateSecret: true
-      AllowedOAuthFlows:
-        - code
-        - implicit
-      AllowedOAuthScopes:
-        - email
-        - aws.cognito.signin.user.admin
-        - openid
-      LogoutURLs:
-        - !Ref LogoutURL
-      CallbackURLs:
-        - !Ref CallbackURL
 
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
@@ -64,9 +47,6 @@ Resources:
     Type: AWS::Cognito::IdentityPool
     Properties:
       IdentityPoolName: MyIdentityPool
-      CognitoIdentityProviders:
-        - ClientId: !Ref CognitoUserPoolClient
-          ProviderName: !GetAtt CognitoUserPool.ProviderName
       AllowUnauthenticatedIdentities: false
       OpenIdConnectProviderARNs:
         - "arn:aws:oidc:${AWS::Region}:${AWS::AccountId}:${CognitoUserPool}"

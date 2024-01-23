@@ -72,6 +72,10 @@ Parameters:
     Type: String
     Description: Arn of the Workspace s3 bucket
 
+  SharedBucket:
+    Type: String
+    Description: Arn of the Shared s3 bucket
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -89,6 +93,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref Environment
+        - Key: Function
+          Value: Dagster
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -272,13 +278,20 @@ Resources:
             Principal: '*'
             Action:
               - 's3:DeleteObject'
+              - 's3:DeleteObjectVersion'
               - 's3:GetObject'
               - 's3:PutObject'
+              - 's3:GetObjectAttributes'
+              - 's3:GetObjectAcl'
+              - 's3:GetBucketLocation'
+              - 's3:ListBucketVersions'
             Resource:
               - !Ref DataStoreBucket
               - !Ref WorkspaceBucket
-              - !Sub "{DataStoreBucket}/*"
-              - !Sub "{WorkspaceBucket}/*"
+              - !Ref SharedBucket
+              - !Sub "${DataStoreBucket}/*"
+              - !Sub "${WorkspaceBucket}/*"
+              - !Sub "${SharedBucket}/*"
           - Effect: Allow
             Principal: '*'
             Action:
@@ -286,9 +299,73 @@ Resources:
             Resource:
               - !Ref DataStoreBucket
               - !Ref WorkspaceBucket
+              - !Ref SharedBucket
       RouteTableIds:
         - !Ref PrivateRouteTable1
         - !Ref PrivateRouteTable2
+
+  ECRDockerRInterfacePrivateEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: 'Interface'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
+      VpcId: !Ref VPC
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
+      SecurityGroupIds:
+        - !Ref DaemonSecurityGroup
+        - !Ref CodeServerSecurityGroup
+        - !Ref DatabaseSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - "ecr:BatchGetImage"
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:CompleteLayerUpload"
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:InitiateLayerUpload"
+              - "ecr:PutImage"
+              - "ecr:UploadLayerPart"
+            Resource:
+              - "*"
+      PrivateDnsEnabled: true
+
+  ECRApiInterfacePrivateEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: 'Interface'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
+      VpcId: !Ref VPC
+      SecurityGroupIds:
+        - !Ref DaemonSecurityGroup
+        - !Ref CodeServerSecurityGroup
+        - !Ref DatabaseSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - "ecr:BatchGetImage"
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:CompleteLayerUpload"
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:InitiateLayerUpload"
+              - "ecr:PutImage"
+              - "ecr:UploadLayerPart"
+            Resource:
+              - "*"
+      PrivateDnsEnabled: true
 
   DatabaseInterfacePrivateEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -322,7 +399,7 @@ Resources:
   PrivateServiceDiscoveryNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
-      Name: my-namespace.local
+      Name: fons-namespace.local
       Vpc: !Ref VPC
 
   DaemonSecurityGroup:
@@ -368,6 +445,9 @@ Resources:
           FromPort: 3000
           ToPort: !Ref DagitHostPort
           CidrIp: !Ref DagitSGCIDR
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
         - CidrIp: 0.0.0.0/0
           IpProtocol: -1
       SecurityGroupEgress:
@@ -469,6 +549,6 @@ Outputs:
     Description: Subnet Group for the database
     Value: !Ref DatabaseSubnetGroup
 
-  PrivateServiceDiscoveryNamespace:
+  PrivateServiceDiscoveryNamespaceId:
     Description: Name of the Namespace for private service discovery. To be used for Service Connect for ECS
     Value: !GetAtt PrivateServiceDiscoveryNamespace.Id
