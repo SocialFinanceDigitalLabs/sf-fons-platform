@@ -35,6 +35,8 @@ Resources:
     Properties:
       BucketName: !Sub "${AppName}-data-store-${OrganisationName}-${Environment}"
       AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -63,6 +65,8 @@ Resources:
     Properties:
       BucketName: !Sub "${AppName}-workspace-${OrganisationName}-${Environment}"
       AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
