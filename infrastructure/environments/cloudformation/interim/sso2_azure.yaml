@@ -33,9 +33,8 @@ Resources:
       AttributeMapping:
         email: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress
         given_name: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname
-        custom:userprincipalname: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name
         family_name: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname
-        custom:groups: http://schemas.microsoft.com/ws/2008/06/identity/claims/groups
+        name: http://schemas.microsoft.com/identity/claims/displayname
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     DependsOn: UserPoolIdentityProvider
