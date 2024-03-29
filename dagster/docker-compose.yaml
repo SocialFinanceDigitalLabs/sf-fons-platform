@@ -3,9 +3,9 @@ version: "3.8"
 services:
   # This service runs the postgres DB used by dagster for run storage, schedule storage,
   # and event log storage.
-  postgresql:
+  postgres:
     image: postgres:11
-    container_name: postgresql
+    container_name: postgres
     environment:
       POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
       POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
@@ -19,11 +19,10 @@ services:
   # Multiple containers like this can be deployed separately - each just needs to run on
   # its own port, and have its own entry in the workspace.yaml file that's loaded by dagit.
   user_code:
-    build:
-      context: .
-      dockerfile: ./Dockerfile_user_code
+    env_file:
+      - .env.staging
     container_name: user_code
-    image: user_code_image
+    image: code-server #mathewpugh/fons-code-server:latest
     restart: always
     environment:
       DAGSTER_POSTGRES_HOST: ${DAGSTER_POSTGRES_HOST}
@@ -32,8 +31,6 @@ services:
       DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
       DAGSTER_POSTGRES_PORT: ${DAGSTER_POSTGRES_PORT}
       DAGSTER_CURRENT_IMAGE: "user_code_image"
-      CODE_FOLDER: ${CODE_FOLDER}
-      REPO_LOCATION: ${REPO_LOCATION}
     networks:
       - network
 
@@ -41,11 +38,13 @@ services:
   # Since our instance uses the QueuedRunCoordinator, any runs submitted from dagit will be put on
   # a queue and later dequeued and launched by dagster-daemon.
   dagit:
+    env_file:
+      - .env.staging
     build:
       context: .
       dockerfile: ./Dockerfile_dagster
     entrypoint:
-      - dagit
+      - dagster-webserver
       - -h
       - "0.0.0.0"
       - -p
@@ -69,12 +68,14 @@ services:
     networks:
       - network
     depends_on:
-      - postgresql
+      - postgres
       - user_code
 
   # This service runs the dagster-daemon process, which is responsible for taking runs
   # off of the queue and launching them, as well as creating runs from schedules or sensors.
   daemon:
+    env_file:
+      - .env.staging
     build:
       context: .
       dockerfile: ./Dockerfile_dagster
@@ -84,18 +85,21 @@ services:
       - dagster-daemon
       - run
     environment:
-      DAGSTER_POSTGRES_HOST: postgresql
+      DAGSTER_POSTGRES_HOST: postgres
       DAGSTER_POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
       DAGSTER_POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
       DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
       DAGSTER_POSTGRES_PORT: ${DAGSTER_POSTGRES_PORT}
+      PYTHONLEGACYWINDOWSSTDIO: utf8.env
+      INCOMING_LOCATION: ${INCOMING_LOCATION}
+      OUTPUT_LOCATION: ${OUTPUT_LOCATION}
     volumes: # Make docker client accessible so we can launch containers using host docker
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
       - network
     depends_on:
-      - postgresql
+      - postgres
       - user_code
 
 networks:
