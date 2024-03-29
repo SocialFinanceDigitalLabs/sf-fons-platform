@@ -9,6 +9,7 @@ RUN pip install \
     dagit \
     dagster-postgres \
     dagster-docker \
+    dagster-webserver \
     dagster-aws
 
 # Set $DAGSTER_HOME and copy dagster instance and workspace YAML there

@@ -10,7 +10,9 @@ run_launcher:
   module: "dagster_aws.ecs"
   class: "EcsRunLauncher"
   config:
-    task_definition: "arn:aws:ecs:eu-west-2:665263451231:task-definition/CodeServerTask:9"
+    include_sidecars: true
+    task_definition:
+      env: DAGSTER_CODE_SERVER_TASK
     container_name: "user_code"
 
 run_storage:
@@ -60,3 +62,6 @@ event_log_storage:
         env: DAGSTER_POSTGRES_DB
       port:
         env: DAGSTER_POSTGRES_PORT
+
+telemetry:
+  enabled: false

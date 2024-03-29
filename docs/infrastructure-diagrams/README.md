@@ -52,19 +52,21 @@ scale lower than other RDS types. If costs go to high, can switch to a different
 S3 buckets will be used for ingress and egress of data. 
 
 # Deployment Steps
-## Standard Deployment
-1. Load `ecr.yaml` into cloudformation 
-2. Create the ECR Repositories
-3. Push the correct images [to the ECR Repositories](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html)
-4. Load `s3.yaml` into cloudformation which should handle the s3 buckets
-5. Load `vpc.yaml` into cloudformation
-6. Make note of the output values to be used in the next step
-7. Load `dagster.yaml` into Cloudformation
-8. Create the Dagster setup
-9. Load `sso.yaml` to create initial SSO/Cognito Setup
-10. Get needed details from SSO provider following step 2 of 
+## Standard Deployment for Regional Organisation
+1. If you plan to use ECR for application images
+   2. Load `ecr.yaml` into cloudformation 
+   2. Create the ECR Repositories
+   3. Push the correct images [to the ECR Repositories](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html)
+2. An alternative would be to use something like Docker hub.
+3. Load `s3.yaml` into cloudformation which should handle the s3 buckets
+4. Load `vpc.yaml` into cloudformation
+5. Make note of the output values to be used in the next step
+6. Load `dagster.yaml` into Cloudformation
+7. Create the Dagster setup
+8. Load `sso.yaml` to create initial SSO/Cognito Setup
+9. Get needed details from SSO provider following step 2 of 
 [this guide](https://aws.amazon.com/blogs/security/how-to-set-up-amazon-cognito-for-federated-authentication-using-azure-ad/)
-11. Run second SSO yaml, depending on provider (e.g. Azure would be `sso2_azure.yaml` with information from Azure)
+10. Run second SSO yaml, depending on provider (e.g. Azure would be `sso2_azure.yaml` with information from Azure)
 
 
 # Deployment Structure
