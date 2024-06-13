@@ -1,4 +1,5 @@
 .env
+.env.staging
 .idea
 __pycache__
 .terraform

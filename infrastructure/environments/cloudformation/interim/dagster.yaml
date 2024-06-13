@@ -84,6 +84,9 @@ Parameters:
   OutputLocation:
     Type: String
     Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
+  ExternalDataLocation:
+    Type: String
+    Description: The location to look for data files coming from external sources (e.g. ONS, post codes, etc)
 
   # Database Parameters
   DBStorageSize:
@@ -526,7 +529,14 @@ Resources:
               Value: "utf8.env"
             - Name: 903_WILDCARDS
               Value: "*.csv"
-
+            - Name: INPUT_LOCATION_EXT
+              Value: !Ref ExternalDataLocation
+            - Name: INPUT_LOCATION_903
+              Value: !Sub "${OutputLocation}/Current"
+            - Name: EXTERNAL_DATA_LOCATION
+              Value: !Ref ExternalDataLocation
+            - Name: INPUT_LOCATION
+              Value: !Ref InputLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -589,6 +599,16 @@ Resources:
               Value: "*.csv"
             - Name: DAGSTER_CURRENT_IMAGE
               Value: !Ref UserCode1ImagePath
+            - Name: INPUT_LOCATION_EXT
+              Value: !Ref ExternalDataLocation
+            - Name: INPUT_LOCATION_903
+              Value: !Sub "${OutputLocation}/Current"
+            - Name: EXTERNAL_DATA_LOCATION
+              Value: !Ref ExternalDataLocation
+            - Name: INPUT_LOCATION
+              Value: !Ref InputLocation
+            - Name: LA_CODE
+              Value: "None"
       Tags:
         - Key: Project
           Value: !Ref ProjectName

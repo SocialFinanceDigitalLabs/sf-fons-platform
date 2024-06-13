@@ -72,6 +72,10 @@ Parameters:
     Type: String
     Description: Arn of the Workspace s3 bucket
 
+  ExternalDataBucket:
+    Type: String
+    Description: Arn of the External Data s3 bucket
+
   SharedBucket:
     Type: String
     Description: Arn of the Shared s3 bucket
@@ -287,9 +291,11 @@ Resources:
               - !Ref DataStoreBucket
               - !Ref WorkspaceBucket
               - !Ref SharedBucket
+              - !Ref ExternalDataBucket
               - !Sub "${DataStoreBucket}/*"
               - !Sub "${WorkspaceBucket}/*"
               - !Sub "${SharedBucket}/*"
+              - !Sub "${ExternalDataBucket}/*"
           - Effect: Allow
             Principal: '*'
             Action:
@@ -298,6 +304,7 @@ Resources:
               - !Ref DataStoreBucket
               - !Ref WorkspaceBucket
               - !Ref SharedBucket
+              - !Ref ExternalDataBucket
       RouteTableIds:
         - !Ref PrivateRouteTable1
         - !Ref PrivateRouteTable2
