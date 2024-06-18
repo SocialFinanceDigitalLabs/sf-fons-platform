@@ -489,7 +489,7 @@ Resources:
       ContainerDefinitions:
         - Name: dagit
           Image: !Ref DagitImagePath
-          Memory: 512
+          Memory: !Ref DagitMemory
           EntryPoint:
             - "dagster-webserver"
             - "-h"
@@ -562,7 +562,7 @@ Resources:
       ContainerDefinitions:
         - Name: user_code
           Image: !Ref UserCode1ImagePath
-          Memory: 512
+          Memory: !Ref CodeServerMemory
           PortMappings:
             - ContainerPort: 4000
               Protocol: tcp
@@ -602,7 +602,7 @@ Resources:
             - Name: INPUT_LOCATION_EXT
               Value: !Ref ExternalDataLocation
             - Name: INPUT_LOCATION_903
-              Value: !Sub "${OutputLocation}/Current"
+              Value: !Sub "${OutputLocation}/export/PAN"
             - Name: EXTERNAL_DATA_LOCATION
               Value: !Ref ExternalDataLocation
             - Name: INPUT_LOCATION
