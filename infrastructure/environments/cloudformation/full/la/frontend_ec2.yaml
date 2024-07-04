@@ -56,9 +56,6 @@ Parameters:
   DataStoreLocationArn:
     Type: String
     Description: Arn of the bucket which stores the uploaded and processed files
-  DagsterVpc:
-    Type: String
-    Description: ID of the VPC used by Dagster
   SecretKey:
     Type: String
     Description: Secret Key to be used with Django setup
@@ -81,7 +78,42 @@ Parameters:
   FonsSSLCertificateARN:
     Type: String
     Description: ARN From ACM of the SSL Certificate
-
+  DBStorageSize:
+    Type: Number
+    Default: 20
+    Description: How many GB the db should be allocated for storage
+  DBInstanceClass:
+    Type: String
+    Default: db.serverless
+    Description: Type of resources for the database to use. See https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Concepts.DBInstanceClass.html#Concepts.DBInstanceClass.Types.serverless-v2
+  DBEngine:
+    Type: String
+    Default: aurora-postgresql
+    Description: Type of database to run. Suggested postgres or aurora-postgresql
+  DBStorageType:
+    Type: String
+    Default: gp2
+    Description: Type of storage to run the database on (standard or gp2 are the usual options)
+  DBName:
+    Type: String
+    Default: postgres
+    Description: The name to be used for the database
+  DBPort:
+    Type: String
+    Default: 3306
+    Description: The port to use to connect to the database
+  DBUsername:
+    Type: String
+    Default: postgres
+    Description: Username to use with the database
+  DBMinCapacity:
+    Type: String
+    Default: 0.5
+    Description: Minimum capacity is 0.5
+  DBMaxCapacity:
+    Type: String
+    Default: 1
+    Description: Minimum capacity is 0.5
 
 Resources:
   FrontendKeyPair:
@@ -214,7 +246,7 @@ Resources:
       LoadBalancerArn: !Ref FrontendALB
       Port: 443
       Protocol: HTTPS
-      SslPolicy: ELBSecurityPolicy-2016-08
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06  #ELBSecurityPolicy-2016-08
       Certificates:
         - CertificateArn: !Ref FonsSSLCertificateARN
 
@@ -335,6 +367,17 @@ Resources:
                   - ec2:DescribeInstances
                 Resource:
                   - "*"
+              - Sid: AllowEC2DataStoreBucketAccess
+                Effect: Allow
+                Action:
+                  - "s3:ListBucket"
+                  - "s3:PutObject"
+                  - "s3:PutObjectAcl"
+                  - "s3:GetObject"
+                Resource:
+                  - !Sub "${DataStoreLocationArn}"
+                  - !Sub "${DataStoreLocationArn}/*"
+
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
@@ -348,7 +391,60 @@ Resources:
       Roles:
         - !Ref FrontendEC2Role
 
+
+  # Database
+    # Database Definition
+  #FrontendDatabaseCluster:
+  #  Type: 'AWS::RDS::DBCluster'
+  #  DeletionPolicy: Delete
+  #  Properties:
+  #    Engine: !Ref DBEngine
+  #    DBClusterIdentifier: !Ref DBName
+  #    MasterUsername: !Ref DBUsername
+  #    MasterUserPassword: !Ref DBPassword
+  #    StorageEncrypted: true
+  #    ServerlessV2ScalingConfiguration:
+  #      MinCapacity: !Ref DBMinCapacity
+  #      MaxCapacity: !Ref DBMaxCapacity
+  #    VpcSecurityGroupIds:
+  #      - !Ref DatabaseSecurityGroup
+  #    DBSubnetGroupName: !Ref DatabaseSubnetGroup
+  #    Tags:
+  #      - Key: Project
+  #        Value: !Ref ProjectName
+  #      - Key: Environment
+  #        Value: !Ref Environment
+
+  #DagsterDatabaseInstance:
+  #  Type: AWS::RDS::DBInstance
+  #  Properties:
+  #    Engine: !Ref DBEngine
+  #    DBInstanceClass: db.serverless
+  #    DBClusterIdentifier: !Ref DagsterDatabaseCluster
+  #    Tags:
+  #      - Key: Project
+  #        Value: !Ref ProjectName
+  #      - Key: Environment
+  #        Value: !Ref Environment#
+
+  #DBPassword:
+  #  Type: AWS::SecretsManager::Secret
+  #  Properties:
+  #    Name: DBPassword
+  #    GenerateSecretString:
+  #      ExcludeLowercase: false
+  #      ExcludeNumbers: false
+  #      ExcludePunctuation: false
+  #      ExcludeUppercase: false
+  #      IncludeSpace: false
+  #      PasswordLength: 20
+  #      RequireEachIncludedType: true
+  #      ExcludeCharacters: "\"'@/\\"
+
 Outputs:
   PublicIP:
     Description: Public IP address of the EC2 instance
     Value: !GetAtt FrontendEC2Instance.PublicIp
+  #FrontendDatabaseEndpointAddress:
+  #  Description: Endpoint Address for the Database
+  #  Value: !GetAtt FrontendDatabaseCluster.Endpoint.Address

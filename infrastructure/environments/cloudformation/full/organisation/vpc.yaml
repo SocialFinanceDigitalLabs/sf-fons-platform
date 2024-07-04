@@ -72,6 +72,10 @@ Parameters:
     Type: String
     Description: Arn of the Workspace s3 bucket
 
+  ExternalDataBucket:
+    Type: String
+    Description: Arn of the External Data s3 bucket
+
   SharedBucket:
     Type: String
     Description: Arn of the Shared s3 bucket
@@ -93,8 +97,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref Environment
-        - Key: Function
-          Value: Dagster
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -289,9 +291,11 @@ Resources:
               - !Ref DataStoreBucket
               - !Ref WorkspaceBucket
               - !Ref SharedBucket
+              - !Ref ExternalDataBucket
               - !Sub "${DataStoreBucket}/*"
               - !Sub "${WorkspaceBucket}/*"
               - !Sub "${SharedBucket}/*"
+              - !Sub "${ExternalDataBucket}/*"
           - Effect: Allow
             Principal: '*'
             Action:
@@ -300,72 +304,10 @@ Resources:
               - !Ref DataStoreBucket
               - !Ref WorkspaceBucket
               - !Ref SharedBucket
+              - !Ref ExternalDataBucket
       RouteTableIds:
         - !Ref PrivateRouteTable1
         - !Ref PrivateRouteTable2
-
-  ECRDockerRInterfacePrivateEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcEndpointType: 'Interface'
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
-      VpcId: !Ref VPC
-      RouteTableIds:
-        - !Ref PrivateRouteTable1
-        - !Ref PrivateRouteTable2
-      SecurityGroupIds:
-        - !Ref DaemonSecurityGroup
-        - !Ref CodeServerSecurityGroup
-        - !Ref DatabaseSecurityGroup
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal: '*'
-            Action:
-              - "ecr:BatchGetImage"
-              - "ecr:BatchCheckLayerAvailability"
-              - "ecr:CompleteLayerUpload"
-              - "ecr:GetDownloadUrlForLayer"
-              - "ecr:InitiateLayerUpload"
-              - "ecr:PutImage"
-              - "ecr:UploadLayerPart"
-            Resource:
-              - "*"
-      PrivateDnsEnabled: true
-
-  ECRApiInterfacePrivateEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcEndpointType: 'Interface'
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
-      VpcId: !Ref VPC
-      SecurityGroupIds:
-        - !Ref DaemonSecurityGroup
-        - !Ref CodeServerSecurityGroup
-        - !Ref DatabaseSecurityGroup
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal: '*'
-            Action:
-              - "ecr:BatchGetImage"
-              - "ecr:BatchCheckLayerAvailability"
-              - "ecr:CompleteLayerUpload"
-              - "ecr:GetDownloadUrlForLayer"
-              - "ecr:InitiateLayerUpload"
-              - "ecr:PutImage"
-              - "ecr:UploadLayerPart"
-            Resource:
-              - "*"
-      PrivateDnsEnabled: true
 
   DatabaseInterfacePrivateEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -399,7 +341,7 @@ Resources:
   PrivateServiceDiscoveryNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
-      Name: fons-namespace.local
+      Name: my-namespace.local
       Vpc: !Ref VPC
 
   DaemonSecurityGroup:
@@ -445,9 +387,6 @@ Resources:
           FromPort: 3000
           ToPort: !Ref DagitHostPort
           CidrIp: !Ref DagitSGCIDR
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
         - CidrIp: 0.0.0.0/0
           IpProtocol: -1
       SecurityGroupEgress:
@@ -549,6 +488,6 @@ Outputs:
     Description: Subnet Group for the database
     Value: !Ref DatabaseSubnetGroup
 
-  PrivateServiceDiscoveryNamespaceId:
+  PrivateServiceDiscoveryNamespace:
     Description: Name of the Namespace for private service discovery. To be used for Service Connect for ECS
     Value: !GetAtt PrivateServiceDiscoveryNamespace.Id
