@@ -1,4 +1,10 @@
 .env
+.env.staging
 .idea
 __pycache__
 .terraform
+.telemetry
+history/
+logs/
+schedules/
+storage/
