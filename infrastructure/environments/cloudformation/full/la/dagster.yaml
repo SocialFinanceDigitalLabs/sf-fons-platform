@@ -87,6 +87,9 @@ Parameters:
   ExternalDataLocation:
     Type: String
     Description: The location to look for data files coming from external sources (e.g. ONS, post codes, etc)
+  OfstedExternalDataLocation:
+    Type: String
+    Description: The location to look for the Ofsted data (external resource)
 
   # Database Parameters
   DBStorageSize:
@@ -609,6 +612,8 @@ Resources:
               Value: !Ref InputLocation
             - Name: LA_CODE
               Value: "None"
+            - Name: INPUT_LOCATION_OFS
+              Value: !Ref OfstedExternalDataLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName

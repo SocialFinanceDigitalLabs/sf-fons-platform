@@ -138,7 +138,18 @@ Resources:
                 - ec2.amazonaws.com
               #AWS: !Ref OrgUserAccountArn
             Action: "s3:GetObject"
-            Resource: !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
+            Resource:
+              - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
+          - Effect: Allow
+            Principal:
+              AWS: !Ref OrgAccountRoleArn
+            Action:
+              - "s3:GetObject"
+              - "s3:ListBucket"
+            Resource:
+              - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
+              - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket ] ]
+
 
   DataStoreStorageRole:
     Type: 'AWS::IAM::Role'
@@ -207,6 +218,11 @@ Resources:
                 - ec2.amazonaws.com
             Action:
               - 'sts:AssumeRole'
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${OrgAccountId}:role/${OrgRoleName}"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
       Policies:
         - PolicyName: !Sub "${AppName}-shared-user-access-${OrganisationName}-${Environment}"
           PolicyDocument:
