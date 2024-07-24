@@ -29,10 +29,6 @@ Parameters:
       Url of the website that will be accessing this bucket (e.g. from a frontend implementation). Connection
       is only allowed from an ec2/ecs reousrce on the same account.
 
-  OrgUserAccountArn:
-    Type: String
-    Description: ARN of the organisation user who can access this bucket
-
   EnableCrossAccountAccess:
     Type: String
     AllowedValues: [ true, false ]
@@ -116,7 +112,6 @@ Resources:
             Principal:
               Service:
                 - ec2.amazonaws.com
-              #AWS: !Ref OrgUserAccountArn
             Action: "s3:GetObject"
             Resource: !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
 
