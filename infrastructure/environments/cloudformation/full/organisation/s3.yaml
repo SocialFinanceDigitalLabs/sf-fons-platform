@@ -113,7 +113,7 @@ Resources:
               Service:
                 - ec2.amazonaws.com
             Action: "s3:GetObject"
-            Resource: !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
+            Resource: !Join [ "", [ "arn:aws:s3:::", !Ref EgressBucket, "/*" ] ]
 
   ExternalDataStoreStorageRole:
     Type: 'AWS::IAM::Role'

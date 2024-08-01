@@ -15,7 +15,7 @@ Parameters:
     Description: The name of the application (No Spaces)
     Type: String
   OrganisationName:
-    Description: The name of the organisation or la (No Spaces)
+    Description: The name of the organisation or platform (No Spaces)
     Type: String
   CallbackUrl:
     Description: The URL of the web application that will receive the auth code (https)

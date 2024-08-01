@@ -1,4 +1,8 @@
 AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  This template manages the dagster implementation which involves three instances:
+  A dagit instance (used for managing job runs), A daemon instance (used for sensing and scheduling), and a
+  code server (used for running pipelines).
 Parameters:
   # Project-level Parameters
   ProjectName:
@@ -84,12 +88,6 @@ Parameters:
   OutputLocation:
     Type: String
     Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
-  ExternalDataLocation:
-    Type: String
-    Description: The location to look for data files coming from external sources (e.g. ONS, post codes, etc)
-  OfstedExternalDataLocation:
-    Type: String
-    Description: The location to look for the Ofsted data (external resource)
 
   # Database Parameters
   DBStorageSize:
@@ -160,7 +158,7 @@ Parameters:
   PrivateServiceDiscoveryNamespace:
     Type: String
     Description: Namespace for private network.
-    Default: fons-namespace.local
+    Default: my-namespace.local
 
 Conditions:
   IsProd: !Equals [!Ref Environment, "prod"]
@@ -401,6 +399,9 @@ Resources:
     Type: AWS::ECS::Cluster
     DependsOn:
       - DagsterDatabaseCluster
+      - CodeServerTaskExecutionRole
+      - DaemonTaskExecutionRole
+      - DagitTaskExecutionRole
     Properties:
       CapacityProviders:
         - FARGATE
@@ -532,12 +533,8 @@ Resources:
               Value: "utf8.env"
             - Name: 903_WILDCARDS
               Value: "*.csv"
-            - Name: INPUT_LOCATION_EXT
-              Value: !Ref ExternalDataLocation
             - Name: INPUT_LOCATION_903
               Value: !Sub "${OutputLocation}/Current"
-            - Name: EXTERNAL_DATA_LOCATION
-              Value: !Ref ExternalDataLocation
             - Name: INPUT_LOCATION
               Value: !Ref InputLocation
       Tags:
@@ -602,18 +599,12 @@ Resources:
               Value: "*.csv"
             - Name: DAGSTER_CURRENT_IMAGE
               Value: !Ref UserCode1ImagePath
-            - Name: INPUT_LOCATION_EXT
-              Value: !Ref ExternalDataLocation
             - Name: INPUT_LOCATION_903
               Value: !Sub "${OutputLocation}/export/PAN"
-            - Name: EXTERNAL_DATA_LOCATION
-              Value: !Ref ExternalDataLocation
             - Name: INPUT_LOCATION
               Value: !Ref InputLocation
             - Name: LA_CODE
               Value: "None"
-            - Name: INPUT_LOCATION_OFS
-              Value: !Ref OfstedExternalDataLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName

@@ -10,7 +10,7 @@ Parameters:
 
   AppName:
     Type: String
-    Default: sfdata
+    Default: fons
     Description: The name for the application or instance.  LOWER CASE, NO SPACES
 
   OrganisationName:
@@ -24,20 +24,20 @@ Parameters:
 
   WebsiteConnectionOriginUrl:
     Type: String
-    Default: "*"
+    Default: "https://{}.dataplatform.org.uk"
     Description: |
       Url of the website that will be accessing this bucket (e.g. from a frontend implementation). Connection
       is only allowed from an ec2/ecs reousrce on the same account.
-
-  OrgUserAccountArn:
-    Type: String
-    Description: ARN of the organisation user who can access this bucket
 
   EnableCrossAccountAccess:
     Type: String
     AllowedValues: [ true, false ]
     Default: true
     Description: Enable cross-account access to the shared S3 bucket
+
+  OrgAccountRoleArn:
+    Type: String
+    Description: Account Organisation role that will be allowed to access the shared storage
 
 Conditions:
   EnableCrossAccountAccessCondition:
@@ -136,22 +136,21 @@ Resources:
             Principal:
               Service:
                 - ec2.amazonaws.com
-              #AWS: !Ref OrgUserAccountArn
             Action: "s3:GetObject"
             Resource:
               - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
-          - Effect: Allow
-            Principal:
-              AWS: !Ref OrgAccountRoleArn
-            Action:
-              - "s3:GetObject"
-              - "s3:ListBucket"
-            Resource:
-              - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
-              - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket ] ]
+          #- Effect: Allow
+          #  Principal:
+          #    AWS: !Ref OrgAccountRoleArn
+          #  Action:
+          #    - "s3:GetObject"
+          #    - "s3:ListBucket"
+          #  Resource:
+          #    - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
+          #    - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket ] ]
 
 
-  DataStoreStorageRole:
+  IngressStorageRole:
     Type: 'AWS::IAM::Role'
     Properties:
       RoleName: !Sub "${AppName}-ingress-user-${OrganisationName}-${Environment}"
@@ -218,9 +217,6 @@ Resources:
                 - ec2.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-          - Effect: Allow
-            Principal:
-              AWS: !Sub "arn:aws:iam::${OrgAccountId}:role/${OrgRoleName}"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
       Policies:

@@ -11,7 +11,7 @@ Parameters:
     Description: The name of the application (No Spaces)
     Type: String
   OrganisationName:
-    Description: The name of the organisation or la (No Spaces)
+    Description: The name of the organisation or platform (No Spaces)
     Type: String
   CallbackURL:
     Description: The callback URL from the identity provider
@@ -77,3 +77,5 @@ Outputs:
     Value: !Sub "urn:amazon:cognito:sp:${CognitoUserPool}"
   ReplyURL:
     Value: !Sub "https://${ApplicationName}-${OrganisationName}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com/saml2/idpresponse"
+  CognitoUserPoolId:
+    Value: !Ref CognitoUserPool

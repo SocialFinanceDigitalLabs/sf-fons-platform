@@ -53,18 +53,17 @@ S3 buckets will be used for ingress and egress of data.
 
 # Deployment Steps
 ## Standard Deployment
-1. Load `ecr.yaml` into cloudformation 
-2. Create the ECR Repositories
-3. Push the correct images [to the ECR Repositories](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html)
+1. Load `ids.yaml` into cloudformation
+2. Create an application to use in your SSO provider
 4. Load `s3.yaml` into cloudformation which should handle the s3 buckets
-5. Load `vpc.yaml` into cloudformation
-6. Make note of the output values to be used in the next step
-7. Load `dagster.yaml` into Cloudformation
-8. Create the Dagster setup
-9. Load `sso.yaml` to create initial SSO/Cognito Setup
-10. Get needed details from SSO provider following step 2 of 
-[this guide](https://aws.amazon.com/blogs/security/how-to-set-up-amazon-cognito-for-federated-authentication-using-azure-ad/)
-11. Run second SSO yaml, depending on provider (e.g. Azure would be `sso2_azure.yaml` with information from Azure)
+5. Load `sso.yaml` to create initial SSO/Cognito Setup
+   * Callback URL will have the structure: https://SUBDOMAIN.dataplatform.org.uk/accounts/amazon-cotgnito/login/callback
+   * Logout URL will have the structure: https://SUBDOMAIN.dataplatform.org.uk/accounts/logout/
+6. Run second SSO yaml, depending on provider (e.g. Azure would be `sso2_azure.yaml` with information from Azure) using [this guide](https://aws.amazon.com/blogs/security/how-to-set-up-amazon-cognito-for-federated-authentication-using-azure-ad/)
+7. Load `frontend_ec2.yaml` into cloudformation which handles the frontend
+8. Load `vpc.yaml` into cloudformation
+9. Make note of the output values to be used in the next step
+10. Load `dagster.yaml` into Cloudformation
 
 
 # Deployment Structure

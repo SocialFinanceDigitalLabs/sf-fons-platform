@@ -18,7 +18,7 @@ Parameters:
     Default: fons
     Description: Name of the platform. Used to name things like database, etc.
   OrganisationName:
-    Description: The name of the organisation or la
+    Description: The name of the organisation or platform
     Type: String
   FrontendLaunchType:
     Type: String

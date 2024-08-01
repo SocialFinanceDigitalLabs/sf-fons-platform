@@ -9,9 +9,10 @@ Parameters:
     Type: String
   ApplicationName:
     Description: The name of the application (No Spaces)
+    Default: "fons"
     Type: String
   OrganisationName:
-    Description: The name of the organisation or la (No Spaces)
+    Description: The name of the organisation or platform (No Spaces)
     Type: String
   CallbackURL:
     Description: The callback URL from the identity provider

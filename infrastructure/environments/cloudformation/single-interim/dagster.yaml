@@ -1,4 +1,8 @@
 AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  This template manages the dagster implementation which involves three instances:
+  A dagit instance (used for managing job runs), A daemon instance (used for sensing and scheduling), and a
+  code server (used for running pipelines).
 Parameters:
   # Project-level Parameters
   ProjectName:
