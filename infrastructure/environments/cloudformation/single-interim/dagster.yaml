@@ -88,6 +88,9 @@ Parameters:
   OutputLocation:
     Type: String
     Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
+  SharedLocation:
+    Type: String
+    Description: Location of the Shared folder used to surface files that are complete
   ExternalDataLocation:
     Type: String
     Description: The location to look for data files coming from external sources (e.g. ONS, post codes, etc)
@@ -618,6 +621,12 @@ Resources:
               Value: !Ref InputLocation
             - Name: LA_CODE
               Value: "None"
+            - Name: WORKSPACE_LOCATION
+              Value: !Ref OutputLocation
+            - Name: INPUT_LOCATION
+              Value: !Ref InputLocation
+            - Name: SHARED_LOCATION
+              Value: !Ref SharedLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName
