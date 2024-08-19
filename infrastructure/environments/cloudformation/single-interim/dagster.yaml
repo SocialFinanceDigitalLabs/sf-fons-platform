@@ -94,6 +94,10 @@ Parameters:
   OfstedExternalDataLocation:
     Type: String
     Description: The location to look for the Ofsted data (external resource)
+  SharedLocation:
+    Type: String
+    Description: The location to put files to surface for the org
+
 
   # Database Parameters
   DBStorageSize:
@@ -618,6 +622,12 @@ Resources:
               Value: !Ref InputLocation
             - Name: LA_CODE
               Value: "None"
+            - Name: WORKSPACE_LOCATION
+              Value: !Ref OutputLocation
+            - Name: INPUT_LOCATION
+              Value: !Ref InputLocation
+            - Name: SHARED_LOCATION
+              Value: !Ref SharedLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName

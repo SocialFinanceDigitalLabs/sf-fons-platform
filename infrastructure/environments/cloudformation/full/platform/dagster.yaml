@@ -88,6 +88,9 @@ Parameters:
   OutputLocation:
     Type: String
     Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
+  SharedLocation:
+    Type: String
+    Description: The location to surface files for the org account
 
   # Database Parameters
   DBStorageSize:
@@ -605,6 +608,12 @@ Resources:
               Value: !Ref InputLocation
             - Name: LA_CODE
               Value: "None"
+            - Name: WORKSPACE_LOCATION
+              Value: !Ref OutputLocation
+            - Name: INPUT_LOCATION
+              Value: !Ref InputLocation
+            - Name: SHARED_LOCATION
+              Value: !Ref SharedLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName
