@@ -98,7 +98,6 @@ Parameters:
     Type: String
     Description: The location to put files to surface for the org
 
-
   # Database Parameters
   DBStorageSize:
     Type: Number
