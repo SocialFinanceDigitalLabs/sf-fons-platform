@@ -1,10 +1,14 @@
 AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  This template manages the dagster implementation which involves three instances:
+  A dagit instance (used for managing job runs), A daemon instance (used for sensing and scheduling), and a
+  code server (used for running pipelines).
 Parameters:
   # Project-level Parameters
   ProjectName:
     Type: String
     Default: Dagster
-    Description: Name of the platform. Used to name things like database, etc.
+    Description: Name of the la. Used to name things like database, etc.
   OrganisationName:
     Type: String
     Default: org
@@ -84,6 +88,9 @@ Parameters:
   OutputLocation:
     Type: String
     Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
+  SharedLocation:
+    Type: String
+    Description: The location to surface files for the org account
 
   # Database Parameters
   DBStorageSize:
@@ -154,7 +161,7 @@ Parameters:
   PrivateServiceDiscoveryNamespace:
     Type: String
     Description: Namespace for private network.
-    Default: fons-namespace.local
+    Default: my-namespace.local
 
 Conditions:
   IsProd: !Equals [!Ref Environment, "prod"]
@@ -224,20 +231,41 @@ Resources:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: DagitTaskHandling
+        - PolicyName: DagitLogHandlingPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              Effect: Allow
+              Action:
+                - "logs:CreateLogGroup"
+              Resource:
+                - "*"
+        - PolicyName: DagitTaskHandlingPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - "ecs:RunTask"
-                  - "ecs:StartTask"
-                  - "ecs:StopTask"
                   - "ecs:DescribeTasks"
-                  - "ecs:DescribeTaskDefinition"
+                  - "ecs:StopTask"
                 Resource:
-                  - !Sub "arn:aws:ecs:*:${AWS::AccountId}:task/*/*"
-                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/CodeServerTask:*"
+                  - "*"
+        - PolicyName: DagitTaskRolePassingPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "iam:PassRole"
+                Resource:
+                  - "*"
+                Condition:
+                  StringLike:
+                    iam:PassedToService: "ecs-tasks.amazonaws.com"
+        - PolicyName: DagitDescribeTasksPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
               - Effect: Allow
                 Action:
                   - "ecs:DescribeTaskDefinition"
@@ -277,6 +305,48 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DaemonLogHandling
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              Effect: Allow
+              Action:
+                - "logs:CreateLogGroup"
+                - "logs:CreateLogStream"
+                - "logs:PutLogEvents"
+              Resource:
+                - "*"
+        - PolicyName: DaemonTaskHandling
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ec2:DescribeNetworkInterfaces"
+                  - "ecs:DescribeTaskDefinition"
+                  - "ecs:DescribeTasks"
+                  - "ecs:ListAccountSettings"
+                  - "ecs:RegisterTaskDefinition"
+                  - "ecs:RunTask"
+                  - "ecs:TagResource"
+                  - "secretsmanager:DescribeSecret"
+                  - "secretsmanager:ListSecrets"
+                  - "secretsmanager:GetSecretValue"
+                Resource:
+                  - "*"
+        - PolicyName: DaemonTaskRolePassing
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "iam:PassRole"
+                Resource:
+                  - "*"
+                Condition:
+                  StringLike:
+                    iam:PassedToService: "ecs-tasks.amazonaws.com"
       ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
@@ -311,6 +381,16 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeServerLogHandling
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource:
+                  - "*"
       ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
@@ -322,6 +402,9 @@ Resources:
     Type: AWS::ECS::Cluster
     DependsOn:
       - DagsterDatabaseCluster
+      - CodeServerTaskExecutionRole
+      - DaemonTaskExecutionRole
+      - DagitTaskExecutionRole
     Properties:
       CapacityProviders:
         - FARGATE
@@ -382,6 +465,12 @@ Resources:
               Value: !Ref OutputLocation
             - Name: INCOMING_LOCATION
               Value: !Ref InputLocation
+            - Name: PYTHONLEGACYWINDOWSSTDIO
+              Value: "utf8.env"
+            - Name: 903_WILDCARDS
+              Value: "*.csv"
+            - Name: DAGSTER_CODE_SERVER_TASK
+              Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -407,9 +496,9 @@ Resources:
       ContainerDefinitions:
         - Name: dagit
           Image: !Ref DagitImagePath
-          Memory: 512
+          Memory: !Ref DagitMemory
           EntryPoint:
-            - "dagit"
+            - "dagster-webserver"
             - "-h"
             - "0.0.0.0"
             - "-p"
@@ -439,7 +528,18 @@ Resources:
               Value: !Ref DBPort
             - Name: DAGSTER_CODE_SERVER_TASK
               Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
-
+            - Name: OUTPUT_LOCATION
+              Value: !Ref OutputLocation
+            - Name: INCOMING_LOCATION
+              Value: !Ref InputLocation
+            - Name: PYTHONLEGACYWINDOWSSTDIO
+              Value: "utf8.env"
+            - Name: 903_WILDCARDS
+              Value: "*.csv"
+            - Name: INPUT_LOCATION_903
+              Value: !Sub "${OutputLocation}/Current"
+            - Name: INPUT_LOCATION
+              Value: !Ref InputLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -465,7 +565,7 @@ Resources:
       ContainerDefinitions:
         - Name: user_code
           Image: !Ref UserCode1ImagePath
-          Memory: 512
+          Memory: !Ref CodeServerMemory
           PortMappings:
             - ContainerPort: 4000
               Protocol: tcp
@@ -482,6 +582,8 @@ Resources:
               Value: !Ref CodeServerPipelineFolder
             - Name: REPO_LOCATION
               Value: !Ref CodeServerPipelineRepoLocation
+            - Name: PYTHONLEGACYWINDOWSSTDIO
+              Value: "utf8.env"
             - Name: OUTPUT_LOCATION
               Value: !Ref OutputLocation
             - Name: INCOMING_LOCATION
@@ -496,6 +598,22 @@ Resources:
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
               Value: !Ref DBPort
+            - Name: 903_WILDCARDS
+              Value: "*.csv"
+            - Name: DAGSTER_CURRENT_IMAGE
+              Value: !Ref UserCode1ImagePath
+            - Name: INPUT_LOCATION_903
+              Value: !Sub "${OutputLocation}/export/PAN"
+            - Name: INPUT_LOCATION
+              Value: !Ref InputLocation
+            - Name: LA_CODE
+              Value: "None"
+            - Name: WORKSPACE_LOCATION
+              Value: !Ref OutputLocation
+            - Name: INPUT_LOCATION
+              Value: !Ref InputLocation
+            - Name: SHARED_LOCATION
+              Value: !Ref SharedLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName

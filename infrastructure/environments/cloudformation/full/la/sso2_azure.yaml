@@ -13,6 +13,7 @@ Parameters:
     Type: String
   ApplicationName:
     Description: The name of the application (No Spaces)
+    Default: "fons"
     Type: String
   OrganisationName:
     Description: The name of the organisation or la (No Spaces)
@@ -61,10 +62,10 @@ Resources:
       IdentityPoolName: MyIdentityPool
       CognitoIdentityProviders:
         - ClientId: !Ref UserPoolClient
-          ProviderName: !Sub "cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}"
+          ProviderName: !Sub "cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}"
       AllowUnauthenticatedIdentities: false
       OpenIdConnectProviderARNs:
-        - "arn:aws:oidc:${AWS::Region}:${AWS::AccountId}:${CognitoUserPool}"
+        - "arn:aws:oidc:${AWS::Region}:${AWS::AccountId}:${UserPoolId}"
 
 Outputs:
   CongitoClientId:

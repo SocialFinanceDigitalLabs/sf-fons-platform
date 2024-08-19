@@ -9,6 +9,7 @@ Parameters:
     Type: String
   ApplicationName:
     Description: The name of the application (No Spaces)
+    Default: "fons"
     Type: String
   OrganisationName:
     Description: The name of the organisation or la (No Spaces)
@@ -37,6 +38,24 @@ Resources:
       VerificationMessageTemplate:
         DefaultEmailOption: CONFIRM_WITH_LINK
 
+  #CognitoUserPoolClient:
+  #  Type: AWS::Cognito::UserPoolClient
+  #  Properties:
+  #    ClientName: !Sub "${ApplicationName}-${OrganisationName}-cognito-client-${EnvironmentName}"
+  #    UserPoolId: !Ref CognitoUserPool
+  #    GenerateSecret: true
+  #    AllowedOAuthFlows:
+  #      - code
+  #      - implicit
+  #    AllowedOAuthScopes:
+  #      - email
+  #      - aws.cognito.signin.user.admin
+  #      - openid
+  #    LogoutURLs:
+  #      - !Ref LogoutURL
+  #    CallbackURLs:
+  #      - !Ref CallbackURL
+
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
@@ -47,6 +66,9 @@ Resources:
     Type: AWS::Cognito::IdentityPool
     Properties:
       IdentityPoolName: MyIdentityPool
+      #CognitoIdentityProviders:
+        #- ClientId: !Ref CognitoUserPoolClient
+        #  ProviderName: !GetAtt CognitoUserPool.ProviderName
       AllowUnauthenticatedIdentities: false
       OpenIdConnectProviderARNs:
         - "arn:aws:oidc:${AWS::Region}:${AWS::AccountId}:${CognitoUserPool}"
