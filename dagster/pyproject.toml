@@ -21,6 +21,7 @@ python-decouple = "^3.8"
 fs = "^2.4.16"
 liiatools = "^0.1.5.3"
 sfdata-stream-parser = "^0.4.1"
+bandit = "^1.7.7"
 
 
 [build-system]
