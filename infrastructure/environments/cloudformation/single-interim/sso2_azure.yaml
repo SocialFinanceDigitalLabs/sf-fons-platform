@@ -35,7 +35,8 @@ Resources:
         given_name: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname
         custom:userprincipalname: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name
         family_name: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname
-        custom:groups: http://schemas.microsoft.com/ws/2008/06/identity/claims/groups
+        locale: http://schemas.microsoft.com/ws/2008/06/identity/claims/groups
+
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     DependsOn: UserPoolIdentityProvider
@@ -51,6 +52,7 @@ Resources:
         - "openid"
         - "email"
         - "aws.cognito.signin.user.admin"
+        - "profile"
       SupportedIdentityProviders:
         - !Sub "${ApplicationName}-${OrganisationName}-AzureADProvider-${EnvironmentName}"
       AllowedOAuthFlowsUserPoolClient: true
