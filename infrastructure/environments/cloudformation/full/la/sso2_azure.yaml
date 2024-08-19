@@ -16,7 +16,7 @@ Parameters:
     Default: "fons"
     Type: String
   OrganisationName:
-    Description: The name of the organisation or platform (No Spaces)
+    Description: The name of the organisation or la (No Spaces)
     Type: String
   CallbackUrl:
     Description: The URL of the web application that will receive the auth code (https)
