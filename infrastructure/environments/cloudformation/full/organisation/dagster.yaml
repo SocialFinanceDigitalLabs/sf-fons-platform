@@ -1,10 +1,14 @@
 AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  This template manages the dagster implementation which involves three instances:
+  A dagit instance (used for managing job runs), A daemon instance (used for sensing and scheduling), and a
+  code server (used for running pipelines).
 Parameters:
   # Project-level Parameters
   ProjectName:
     Type: String
     Default: Dagster
-    Description: Name of the platform. Used to name things like database, etc.
+    Description: Name of the la. Used to name things like database, etc.
   OrganisationName:
     Type: String
     Default: org
@@ -87,6 +91,9 @@ Parameters:
   ExternalDataLocation:
     Type: String
     Description: The location to look for data files coming from external sources (e.g. ONS, post codes, etc)
+  OfstedExternalDataLocation:
+    Type: String
+    Description: The location to look for the Ofsted data (external resource)
 
   # Database Parameters
   DBStorageSize:
@@ -603,6 +610,8 @@ Resources:
               Value: !Ref ExternalDataLocation
             - Name: INPUT_LOCATION_903
               Value: !Sub "${OutputLocation}/export/PAN"
+            - Name: INPUT_LOCATION_OFS
+              Value: !Ref OfstedExternalDataLocation
             - Name: EXTERNAL_DATA_LOCATION
               Value: !Ref ExternalDataLocation
             - Name: INPUT_LOCATION

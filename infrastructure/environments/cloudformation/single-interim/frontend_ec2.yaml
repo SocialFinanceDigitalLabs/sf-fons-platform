@@ -8,7 +8,7 @@ Parameters:
     Description: The name for the environment. Expected values are dev, staging, prod
   WebsiteUrl:
     Type: String
-    Description: The URL of the platform
+    Description: The URL of the la
   FrontendVpcCIDR:
     Type: String
     Default: 10.192.50.0/16
@@ -16,7 +16,7 @@ Parameters:
   ProjectName:
     Type: String
     Default: fons
-    Description: Name of the platform. Used to name things like database, etc.
+    Description: Name of the la. Used to name things like database, etc.
   OrganisationName:
     Description: The name of the organisation or la
     Type: String

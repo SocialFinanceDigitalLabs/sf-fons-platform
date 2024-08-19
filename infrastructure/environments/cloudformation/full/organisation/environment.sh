@@ -1,0 +1,1 @@
+DATABASE_PASSWORD=$(aws secretsmanager get-secret-value --secret-id MySecret --query SecretString --output text)

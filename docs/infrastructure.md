@@ -29,4 +29,14 @@ for details
    7. Dagster
 
 # For multiple account setup
-To Yet Be Defined
+The multi-account setup creates a division between the uploaded files that LAs submit and the eventual 
+files that regional authorities can access. To accomplish this, we have two accounts to maintain that division:
+1. LA - Where LAs can upload files and have them cleaned and psuedonomised.
+2. Organisation - Where the files that were created from the LA are combined with regional and other data (e.g. ONS, 
+postcode, etc) to create output that can be used for analysis at a regional level.
+
+In order to set this up, use the full directory in the cloudformation folder. Bring the infrastructure up in the following order:
+1. Organisation
+2. LA (taking the organisation account id as an input to allow access to the shared bucket.)
+
+Otherwise the order of how files are applied in each account remains the same for the single account setup (above).
