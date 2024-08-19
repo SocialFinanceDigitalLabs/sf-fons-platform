@@ -76,6 +76,16 @@ Resources:
               - !Ref WebsiteConnectionOriginUrl
             Id: DataStoreRule
 
+  ExternalDataStoreBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-external-data-store-${OrganisationName}-${Environment}"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
   WorkspaceBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
@@ -134,7 +144,9 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Ref OrgUserAccountArn
+              Service:
+                - ec2.amazonaws.com
+              #AWS: !Ref OrgUserAccountArn
             Action: "s3:GetObject"
             Resource: !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
 
@@ -163,6 +175,32 @@ Resources:
                   - "s3:GetObject"
                   - "s3:DeleteObject"
                 Resource: !Sub "${DataStoreBucket.Arn}/*"
+
+  ExternalDataStoreStorageRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub "${AppName}-external-data-store-user-${OrganisationName}-${Environment}"
+      Description: "Role that allows a user to access the external data store s3 Bucket"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub "${AppName}-external-data-store-user-access-${OrganisationName}-${Environment}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:DeleteObject"
+                Resource: !Sub "${ExternalDataStoreBucket.Arn}/*"
 
   WorkspaceStorageRole:
     Type: 'AWS::IAM::Role'
@@ -220,19 +258,37 @@ Resources:
 Outputs:
   DataStoreBucketName:
     Value: !Ref DataStoreBucket
-    Description: Name of the sample Amazon S3 bucket with a lifecycle configuration.
+    Description: Name of the data store Amazon S3 bucket with a lifecycle configuration.
+  DataStoreBucketArn:
+    Value: !GetAtt DataStoreBucket.Arn
+    Description: ARN of the data store Amazon S3 bucket with a lifecycle configuration
   DataStoreRoleARN:
     Value: !GetAtt DataStoreStorageRole.Arn
     Description: ARN of the role used to access the data store bucket
+  ExternalDataStoreBucketName:
+    Value: !Ref ExternalDataStoreBucket
+    Description: Name of the external data Amazon S3 bucket with a lifecycle configuration.
+  ExternalDataStoreBucketArn:
+    Value: !GetAtt ExternalDataStoreBucket.Arn
+    Description: ARN of the external data store Amazon S3 bucket with a lifecycle configuration
+  ExternalDataStoreRoleARN:
+    Value: !GetAtt ExternalDataStoreStorageRole.Arn
+    Description: ARN of the role used to access the data store bucket
   WorkspaceBucketName:
     Value: !Ref WorkspaceBucket
-    Description: Name of the sample Amazon S3 bucket with a lifecycle configuration.
+    Description: Name of the workspace Amazon S3 bucket with a lifecycle configuration.
+  WorkspaceBucketArn:
+    Value: !GetAtt WorkspaceBucket.Arn
+    Description: ARN of the workspace Amazon S3 bucket with a lifecycle configuration.
   WorkspaceRoleARN:
     Value: !GetAtt WorkspaceStorageRole.Arn
     Description: ARN of the role used to access the data store bucket
   SharedBucketName:
     Value: !Ref SharedBucket
-    Description: Name of the sample Amazon S3 bucket with a lifecycle configuration.
+    Description: Name of the shared Amazon S3 bucket with a lifecycle configuration.
+  SharedBucketArn:
+    Value: !GetAtt SharedBucket.Arn
+    Description: Arn of the shared Amazon S3 bucket with a lifecycle configuration.
   SharedRoleARN:
     Value: !GetAtt SharedStorageRole.Arn
     Description: ARN of the role used to access the data store bucket

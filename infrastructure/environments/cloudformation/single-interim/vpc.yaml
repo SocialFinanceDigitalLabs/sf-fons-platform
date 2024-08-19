@@ -72,6 +72,10 @@ Parameters:
     Type: String
     Description: Arn of the Workspace s3 bucket
 
+  ExternalDataBucket:
+    Type: String
+    Description: Arn of the External Data s3 bucket
+
   SharedBucket:
     Type: String
     Description: Arn of the Shared s3 bucket
@@ -93,8 +97,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref Environment
-        - Key: Function
-          Value: Dagster
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -289,9 +291,11 @@ Resources:
               - !Ref DataStoreBucket
               - !Ref WorkspaceBucket
               - !Ref SharedBucket
+              - !Ref ExternalDataBucket
               - !Sub "${DataStoreBucket}/*"
               - !Sub "${WorkspaceBucket}/*"
               - !Sub "${SharedBucket}/*"
+              - !Sub "${ExternalDataBucket}/*"
           - Effect: Allow
             Principal: '*'
             Action:
@@ -300,6 +304,7 @@ Resources:
               - !Ref DataStoreBucket
               - !Ref WorkspaceBucket
               - !Ref SharedBucket
+              - !Ref ExternalDataBucket
       RouteTableIds:
         - !Ref PrivateRouteTable1
         - !Ref PrivateRouteTable2
@@ -336,7 +341,7 @@ Resources:
   PrivateServiceDiscoveryNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
-      Name: fons-namespace.local
+      Name: my-namespace.local
       Vpc: !Ref VPC
 
   DaemonSecurityGroup:
@@ -483,6 +488,6 @@ Outputs:
     Description: Subnet Group for the database
     Value: !Ref DatabaseSubnetGroup
 
-  PrivateServiceDiscoveryNamespaceId:
+  PrivateServiceDiscoveryNamespace:
     Description: Name of the Namespace for private service discovery. To be used for Service Connect for ECS
     Value: !GetAtt PrivateServiceDiscoveryNamespace.Id
