@@ -1,0 +1,116 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECS Service with Auto-Scaling
+
+
+Parameters:
+  DaemonServiceName:
+    Type: String
+    Description: Name for the Dagster Daemon Service
+  DaemonServiceArn:
+    Type: String
+    Description: ARN for the Dagster Daemon Service
+  DagitServiceName:
+    Type: String
+    Description: Name for the Dagit Service
+  DagitServiceARN:
+    Type: String
+    Description: ARN for the Dagit Service
+  CodeServerServiceName:
+    Type: String
+    Description: Name for the Dagit Service
+  CodeServerServiceARN:
+    Type: String
+    Description: ARN for the Dagit Service
+  ECSClusterName:
+    Type: String
+    Description: Name for the ECS Dagster Service
+
+Resources:
+  FonsDagsterScalingLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: ECSScalingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                Resource:
+                  - !Ref DaemonServiceARN
+                  - !Ref DagitServiceARN
+                  - !Ref CodeServerServiceARN
+
+  FonsScalingUpLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: scaling-up-lambda.zip
+      Role: !GetAtt MyScalingLambdaRole.Arn
+      Handler: index.lambda_handler
+      Runtime: python3.11
+      Timeout: 300
+      Environment:
+        Variables:
+          ECS_CLUSTER_NAME: !Ref ECSClusterName
+          ECS_DAGIT_SERVICE_NAMES: !Ref DagitServiceName
+          ECS_DAEMON_SERVICE_NAMES: !Ref DaemonServiceName
+          ECS_CODE_SERVER_SERVICE_NAMES: !Ref CodeServerServiceName
+
+  FonsScalingDownLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: scaling-down-lambda.zip
+      Role: !GetAtt MyScalingLambdaRole.Arn
+      Handler: index.lambda_handler
+      Runtime: python3.11
+      Timeout: 300
+      Environment:
+        Variables:
+          ECS_CLUSTER_NAME: !Ref ECSClusterName
+          ECS_DAGIT_SERVICE_NAMES: !Ref DagitServiceName
+          ECS_DAEMON_SERVICE_NAMES: !Ref DaemonServiceName
+          ECS_CODE_SERVER_SERVICE_NAMES: !Ref CodeServerServiceName
+
+  FonsScalingUpRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: "cron(30 23 * * ?)"
+      Name: Fons Scaling Up Rule
+      Description: Trigger Lambda function at 23:30 PM every day
+      RoleArn: !Ref FonsDagsterScalingLambdaRole
+      Targets:
+        - Id: !Ref FonsScalingUpLambda
+          Arn: !GetAtt FonsScalingUpLambda.Arn
+
+  FonsScalingDownRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: "cron(0 6 * * ?)"
+      Name: Fons Scaling Down Rule
+      Description: Trigger Lambda function at 6:00 AM every day
+      RoleArn: !Ref FonsDagsterScalingLambdaRole
+      Targets:
+        - Id: !Ref FonsScalingUpLambda
+          Arn: !GetAtt FonsScalingUpLambda.Arn
+
+  LambdaCodeBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-lambda-code-${OrganisationName}-${Environment}"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256

@@ -759,3 +759,24 @@ Outputs:
   DatabaseEndpointAddress:
     Description: Endpoint Address for the Database
     Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
+  ECSClusterName:
+    Description: ARN for the ECS Cluster running dagster
+    Value: !Ref DagsterCluster
+  DaemonServiceName:
+    Description: Name for the Dagster Daemon Service
+    Value: !GetAtt DagsterDaemonService.Name
+  DaemonServiceARN:
+    Description: ARN for the Dagster Daemon Service
+    Value: !Ref DagsterDaemonService
+  DagitServiceName:
+    Description: Name for the Dagit Service
+    Value: !GetAtt DagitService.Name
+  DagitServiceARN:
+    Description: ARN for the Dagit Service
+    Value: !Ref DagitService
+  CodeServerServiceName:
+    Description: Name for the Dagit Service
+    Value: !GetAtt CodeServerService.Name
+  CodeServerServiceARN:
+    Description: ARN for the Dagit Service
+    Value: !Ref CodeServerService

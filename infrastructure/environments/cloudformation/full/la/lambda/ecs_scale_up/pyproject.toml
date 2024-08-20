@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "ecs_scale_down"
+version = "0.1.0"
+description = "A lambda to scale down ECS services for the data platform"
+authors = ["Matthew Pugh <pughmds@cyram.org>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+boto3 = "^1.35.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
