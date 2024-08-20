@@ -13,8 +13,8 @@ def lambda_handler(event, context):
 
     logger = logging.getLogger("ecs_scale_down")
 
-    ecs_client = boto3.client('ecs')
-    cluster = os.environ.get('ECS_CLUSTER_NAME')
+    ecs_client = boto3.client("ecs")
+    cluster = os.environ.get("ECS_CLUSTER_NAME")
     dagit_service = os.environ.get("ECS_DAGIT_SERVICE_NAMES")
     daemon_service = os.environ.get("ECS_DAEMON_SERVICE_NAMES")
     code_service = os.environ.get("ECS_CODE_SERVER_SERVICE_NAMES")
@@ -22,15 +22,13 @@ def lambda_handler(event, context):
     for service in (dagit_service, daemon_service, code_service):
         try:
             response = ecs_client.update_service(
-                cluster=cluster,
-                service=service,
-                desiredCount=0
+                cluster=cluster, service=service, desiredCount=0
             )
-            logger.info(f"Sucessfully scaled down Service {service}: {response}")
+            logger.info(f"Successfully scaled down Service {service}: {response}")
         except Exception as e:
-            logger.error(f"Could not Scale Service {service}: {e}")
+            logger.error(f"Could not Scale down Service {service}: {e}")
             continue
 
 
 if __name__ == "__main__":
-    print(lambda_handler(None,None))
+    print(lambda_handler(None, None))
