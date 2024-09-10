@@ -80,17 +80,35 @@ Parameters:
     Type: String
     Default: "repository.py"
     Description: Location of the repo.py file that controls the repository
+
+  # Dagster Parameters
   InputLocation:
     Type: String
     Description: |
       The standard location to look for files to ingest into the pipelines. For s3, this must be a ROOT path, no folders
       Example: s3://my-bucket-name
-  OutputLocation:
+  WorkspaceLocation:
     Type: String
     Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
-  SharedLocation:
+  OutputLocation:
     Type: String
     Description: The location to surface files for the org account
+  ExternalDataLocation:
+    Type: String
+    Description: Location of external data to be used for the pipeline (shouldn't be used in the LA instance)
+    Default: ""
+  CleanPipelineSchedule:
+    Type: String
+    Description: The CRON string used to determine how often the clean file pipeline should run
+    Default: "0 0 * * 1-5"
+  ReportsPipelineSchedule:
+    Type: String
+    Description: The CRON string used to determine how often the Reports pipeline should run. Note that This should never run on the LA instance, so default is date that should never happen.
+    Default: "0 0 0 31 2"
+  AllowedDatasets:
+    Type: String
+    Description: Which datasets to allow to run on the system
+    Default: "ssda903,cin"
 
   # Database Parameters
   DBStorageSize:
@@ -463,7 +481,7 @@ Resources:
               Value: !Ref DBPort
             - Name: OUTPUT_LOCATION
               Value: !Ref OutputLocation
-            - Name: INCOMING_LOCATION
+            - Name: INPUT_LOCATION
               Value: !Ref InputLocation
             - Name: PYTHONLEGACYWINDOWSSTDIO
               Value: "utf8.env"
@@ -530,7 +548,7 @@ Resources:
               Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
             - Name: OUTPUT_LOCATION
               Value: !Ref OutputLocation
-            - Name: INCOMING_LOCATION
+            - Name: INPUT_LOCATION
               Value: !Ref InputLocation
             - Name: PYTHONLEGACYWINDOWSSTDIO
               Value: "utf8.env"
@@ -584,10 +602,6 @@ Resources:
               Value: !Ref CodeServerPipelineRepoLocation
             - Name: PYTHONLEGACYWINDOWSSTDIO
               Value: "utf8.env"
-            - Name: OUTPUT_LOCATION
-              Value: !Ref OutputLocation
-            - Name: INCOMING_LOCATION
-              Value: !Ref InputLocation
             - Name: DAGSTER_POSTGRES_HOST
               Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
             - Name: DAGSTER_POSTGRES_USER
@@ -602,18 +616,18 @@ Resources:
               Value: "*.csv"
             - Name: DAGSTER_CURRENT_IMAGE
               Value: !Ref UserCode1ImagePath
-            - Name: INPUT_LOCATION_903
-              Value: !Sub "${OutputLocation}/export/PAN"
-            - Name: INPUT_LOCATION
-              Value: !Ref InputLocation
-            - Name: LA_CODE
-              Value: "None"
             - Name: WORKSPACE_LOCATION
-              Value: !Ref OutputLocation
+              Value: !Ref WorkspaceLocation
             - Name: INPUT_LOCATION
               Value: !Ref InputLocation
             - Name: SHARED_LOCATION
-              Value: !Ref SharedLocation
+              Value: !Ref OutputLocation
+            - Name: CLEAN_SCHEDULE
+              Value: !Ref CleanPipelineSchedule
+            - Name: REPORTS_SCHEDULE
+              Value: !Ref ReportsPipelineSchedule
+            - Name: ALLOWED_DATASETS
+              Value: !Ref AllowedDatasets
       Tags:
         - Key: Project
           Value: !Ref ProjectName

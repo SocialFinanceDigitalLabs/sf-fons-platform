@@ -46,10 +46,10 @@ Conditions:
       - true
 
 Resources:
-  IngressBucket:
+  DataStoreBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: !Sub "${AppName}-ingress-${OrganisationName}-${Environment}"
+      BucketName: !Sub "${AppName}-data-store-${OrganisationName}-${Environment}"
       AccessControl: Private
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -139,15 +139,19 @@ Resources:
             Action: "s3:GetObject"
             Resource:
               - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
-          #- Effect: Allow
-          #  Principal:
-          #    AWS: !Ref OrgAccountRoleArn
-          #  Action:
-          #    - "s3:GetObject"
-          #    - "s3:ListBucket"
-          #  Resource:
-          #    - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
-          #    - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket ] ]
+          - Effect: Allow
+            Principal:
+              AWS: !Ref OrgAccountRoleArn
+            Action:
+              - "s3:GetObject"
+              - "s3:ListBucket"
+              - "s3:GetBucketAcl"
+              - "s3:GetObjectAcl"
+              - "s3:GetObjectAttributes"
+              - "s3:GetObjectTagging"
+            Resource:
+              - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
+              - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket ] ]
 
 
   IngressStorageRole:
@@ -174,7 +178,7 @@ Resources:
                   - "s3:PutObject"
                   - "s3:GetObject"
                   - "s3:DeleteObject"
-                Resource: !Sub "${IngressBucket.Arn}/*"
+                Resource: !Sub "${DataStoreBucket.Arn}/*"
 
   WorkspaceStorageRole:
     Type: 'AWS::IAM::Role'
@@ -233,10 +237,10 @@ Resources:
 
 Outputs:
   IngressBucketName:
-    Value: !Ref IngressBucket
+    Value: !Ref DataStoreBucket
     Description: Name of the ingress Amazon S3 bucket with a lifecycle configuration.
   IngressBucketArn:
-    Value: !GetAtt IngressBucket.Arn
+    Value: !GetAtt DataStoreBucket.Arn
     Description: ARN of the ingress store Amazon S3 bucket with a lifecycle configuration
   IngressRoleARN:
     Value: !GetAtt IngressStorageRole.Arn
