@@ -102,7 +102,7 @@ Parameters:
   CleanPipelineSchedule:
     Type: String
     Description: The CRON string used to determine how often the clean file pipeline should run
-    Default: "0 0 0 31 2"
+    Default: "0 0 31 2 *"
   ReportsPipelineSchedule:
     Type: String
     Description: The CRON string used to determine how often the Reports pipeline should run. Note that This should never run on the LA instance, so default is date that should never happen.

@@ -104,7 +104,7 @@ Parameters:
   ReportsPipelineSchedule:
     Type: String
     Description: The CRON string used to determine how often the Reports pipeline should run. Note that This should never run on the LA instance, so default is date that should never happen.
-    Default: "0 0 0 31 2"
+    Default: "0 0 31 2 *"
   AllowedDatasets:
     Type: String
     Description: Which datasets to allow to run on the system

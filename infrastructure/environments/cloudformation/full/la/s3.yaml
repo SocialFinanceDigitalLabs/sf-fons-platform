@@ -138,7 +138,7 @@ Resources:
                 - ec2.amazonaws.com
             Action: "s3:GetObject"
             Resource:
-              - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
+              - !Sub "${SharedBucket.Arn}/*"
           - Effect: Allow
             Principal:
               AWS: !Ref OrgAccountRoleArn
@@ -150,8 +150,8 @@ Resources:
               - "s3:GetObjectAttributes"
               - "s3:GetObjectTagging"
             Resource:
-              - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket, "/*" ] ]
-              - !Join [ "", [ "arn:aws:s3:::", !Ref SharedBucket ] ]
+              - !Sub "${SharedBucket.Arn}/*"
+              - !Ref SharedBucket.Arn
 
 
   IngressStorageRole:
