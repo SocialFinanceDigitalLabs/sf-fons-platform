@@ -80,20 +80,37 @@ Parameters:
     Type: String
     Default: "repository.py"
     Description: Location of the repo.py file that controls the repository
+
+  # Dagster Parameters
   InputLocation:
     Type: String
     Description: |
       The standard location to look for files to ingest into the pipelines. For s3, this must be a ROOT path, no folders
       Example: s3://my-bucket-name
+  InputLocationArn:
+    Type: String
+    Description: ARN of the InputLocation bucket
   OutputLocation:
+    Type: String
+    Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
+  WorkspaceLocation:
     Type: String
     Description: The standard output location for pipeline files. For s3, this must be a ROOT path, no folders.
   ExternalDataLocation:
     Type: String
     Description: The location to look for data files coming from external sources (e.g. ONS, post codes, etc)
-  OfstedExternalDataLocation:
+  CleanPipelineSchedule:
     Type: String
-    Description: The location to look for the Ofsted data (external resource)
+    Description: The CRON string used to determine how often the clean file pipeline should run.  Note that This should never run on the Org instance, so default is date that should never happen.
+    Default: "0 0 31 2 *"
+  ReportsPipelineSchedule:
+    Type: String
+    Description: The CRON string used to determine how often the Reports pipeline should run. Note that This should never run on the LA instance, so default is date that should never happen.
+    Default: "0 0 * * 1-5"
+  AllowedDatasets:
+    Type: String
+    Description: Which datasets to allow to run on the system
+    Default: "ssda903,cin"
 
   # Database Parameters
   DBStorageSize:
@@ -394,6 +411,21 @@ Resources:
                   - "logs:CreateLogGroup"
                 Resource:
                   - "*"
+        - PolicyName: LASharedSpaceAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                  - "s3:GetBucketAcl"
+                  - "s3:GetObjectAcl"
+                  - "s3:GetObjectAttributes"
+                  - "s3:GetObjectTagging"
+                Resource:
+                  - !Ref InputLocationArn
+
       ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
@@ -461,14 +493,8 @@ Resources:
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
               Value: !Ref DBPort
-            - Name: OUTPUT_LOCATION
-              Value: !Ref OutputLocation
-            - Name: INCOMING_LOCATION
-              Value: !Ref InputLocation
             - Name: PYTHONLEGACYWINDOWSSTDIO
               Value: "utf8.env"
-            - Name: 903_WILDCARDS
-              Value: "*.csv"
             - Name: DAGSTER_CODE_SERVER_TASK
               Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
       Tags:
@@ -528,22 +554,8 @@ Resources:
               Value: !Ref DBPort
             - Name: DAGSTER_CODE_SERVER_TASK
               Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
-            - Name: OUTPUT_LOCATION
-              Value: !Ref OutputLocation
-            - Name: INCOMING_LOCATION
-              Value: !Ref InputLocation
             - Name: PYTHONLEGACYWINDOWSSTDIO
               Value: "utf8.env"
-            - Name: 903_WILDCARDS
-              Value: "*.csv"
-            - Name: INPUT_LOCATION_EXT
-              Value: !Ref ExternalDataLocation
-            - Name: INPUT_LOCATION_903
-              Value: !Sub "${OutputLocation}/Current"
-            - Name: EXTERNAL_DATA_LOCATION
-              Value: !Ref ExternalDataLocation
-            - Name: INPUT_LOCATION
-              Value: !Ref InputLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -588,10 +600,6 @@ Resources:
               Value: !Ref CodeServerPipelineRepoLocation
             - Name: PYTHONLEGACYWINDOWSSTDIO
               Value: "utf8.env"
-            - Name: OUTPUT_LOCATION
-              Value: !Ref OutputLocation
-            - Name: INCOMING_LOCATION
-              Value: !Ref InputLocation
             - Name: DAGSTER_POSTGRES_HOST
               Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
             - Name: DAGSTER_POSTGRES_USER
@@ -602,22 +610,22 @@ Resources:
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
               Value: !Ref DBPort
-            - Name: 903_WILDCARDS
-              Value: "*.csv"
             - Name: DAGSTER_CURRENT_IMAGE
               Value: !Ref UserCode1ImagePath
-            - Name: INPUT_LOCATION_EXT
-              Value: !Ref ExternalDataLocation
-            - Name: INPUT_LOCATION_903
-              Value: !Sub "${OutputLocation}/export/PAN"
-            - Name: INPUT_LOCATION_OFS
-              Value: !Ref OfstedExternalDataLocation
             - Name: EXTERNAL_DATA_LOCATION
               Value: !Ref ExternalDataLocation
             - Name: INPUT_LOCATION
               Value: !Ref InputLocation
-            - Name: LA_CODE
-              Value: "None"
+            - Name: WORKSPACE_LOCATION
+              Value: !Ref WorkspaceLocation
+            - Name: OUTPUT_LOCATION
+              Value: !Ref OutputLocation
+            - Name: CLEAN_SCHEDULE
+              Value: !Ref CleanPipelineSchedule
+            - Name: REPORTS_SCHEDULE
+              Value: !Ref ReportsPipelineSchedule
+            - Name: ALLOWED_DATASETS
+              Value: !Ref AllowedDatasets
       Tags:
         - Key: Project
           Value: !Ref ProjectName
