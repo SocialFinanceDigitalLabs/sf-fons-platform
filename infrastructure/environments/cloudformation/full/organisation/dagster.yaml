@@ -101,7 +101,7 @@ Parameters:
     Description: The location to look for data files coming from external sources (e.g. ONS, post codes, etc)
   CleanPipelineSchedule:
     Type: String
-    Description: The CRON string used to determine how often the clean file pipeline should run
+    Description: The CRON string used to determine how often the clean file pipeline should run.  Note that This should never run on the Org instance, so default is date that should never happen.
     Default: "0 0 31 2 *"
   ReportsPipelineSchedule:
     Type: String
