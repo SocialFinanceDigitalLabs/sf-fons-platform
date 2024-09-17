@@ -65,3 +65,10 @@ event_log_storage:
 
 telemetry:
   enabled: false
+
+run_monitoring:
+  enabled: true
+  start_timeout_seconds: 180
+  cancel_timeout_seconds: 180
+  max_resume_run_attempts: 1 # experimental if above 0
+  poll_interval_seconds: 120
