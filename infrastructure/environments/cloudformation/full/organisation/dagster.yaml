@@ -632,7 +632,7 @@ Resources:
               Value: !Ref InputLocation
             - Name: WORKSPACE_LOCATION
               Value: !Ref WorkspaceLocation
-            - Name: OUTPUT_LOCATION
+            - Name: SHARED_LOCATION
               Value: !Ref OutputLocation
             - Name: CLEAN_SCHEDULE
               Value: !Ref CleanPipelineSchedule
