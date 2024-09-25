@@ -70,6 +70,17 @@ Resources:
               NoncurrentVersionExpirationInDays: !Ref AutoFileDeletion
               Status: 'Enabled'
 
+  EgressBackup:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-egress-${OrganisationName}-${Environment}-backup"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
 
   EgressBucket:
     Type: 'AWS::S3::Bucket'
@@ -100,6 +111,63 @@ Resources:
             AllowedOrigins:
               - !Ref WebsiteConnectionOriginUrl
             Id: SharedRule
+      VersioningConfiguration:
+        Status: Enabled
+      ReplicationConfiguration:
+        Role: !GetAtt
+          - EgressBucketBackupRole
+          - Arn
+        Rules:
+          - Destination:
+              Bucket: !GetAtt EgressBackup.Arn
+              StorageClass: STANDARD
+            Id: Backup
+            Prefix: ''
+            Status: Enabled
+
+  EgressBucketBackupRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+
+  EgressBucketBackupPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetReplicationConfiguration'
+              - 's3:ListBucket'
+            Effect: Allow
+            Resource: !GetAtt EgressBucket.Arn
+          - Action:
+              - 's3:GetObjectVersion'
+              - 's3:GetObjectVersionAcl'
+            Effect: Allow
+            Resource:
+              - !Join
+                - ''
+                - - !GetAtt EgressBucket.Arn
+                  - "/*"
+          - Action:
+              - 's3:ReplicateObject'
+              - 's3:ReplicateDelete'
+            Effect: Allow
+            Resource:
+              - !Join
+                - ''
+                - - !GetAtt EgressBackup.Arn
+                  - "/*"
+      PolicyName: EgressBucketBackupPolicy
+      Roles:
+        - !Ref EgressBucketBackupRole
 
   EgressBucketAccessPolicy:
     Type: AWS::S3::BucketPolicy
