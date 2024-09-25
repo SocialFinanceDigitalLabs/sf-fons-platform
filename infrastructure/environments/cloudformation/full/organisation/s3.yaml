@@ -114,9 +114,7 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
       ReplicationConfiguration:
-        Role: !GetAtt
-          - EgressBucketBackupRole
-          - Arn
+        Role: !GetAtt EgressBucketBackupRole.Arn
         Rules:
           - Destination:
               Bucket: !GetAtt EgressBackup.Arn
