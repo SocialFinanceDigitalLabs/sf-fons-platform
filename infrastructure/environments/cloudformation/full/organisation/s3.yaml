@@ -119,8 +119,6 @@ Resources:
           - Destination:
               Bucket: !GetAtt EgressBackup.Arn
               StorageClass: STANDARD
-              Metrics:
-                Status: Enabled
             Id: Backup
             Prefix: ''
             Status: Enabled
