@@ -101,9 +101,9 @@ Resources:
             Id: Backup
             Prefix: ''
             Status: Enabled
-            SourceSelectionCriteria:
-              ReplicaModifications:
-                Status: Disabled
+#            SourceSelectionCriteria:
+#              ReplicaModifications:
+#                Status: Disabled
 
   DataStoreBucketBackupRole:
     Type: 'AWS::IAM::Role'
@@ -224,9 +224,9 @@ Resources:
             Id: Backup
             Prefix: ''
             Status: Enabled
-            SourceSelectionCriteria:
-              ReplicaModifications:
-                Status: Disabled
+#            SourceSelectionCriteria:
+#              ReplicaModifications:
+#                Status: Disabled
 
   SharedBucketBackupRole:
     Type: 'AWS::IAM::Role'

@@ -124,9 +124,10 @@ Resources:
             Id: Backup
             Prefix: ''
             Status: Enabled
-            SourceSelectionCriteria:
-              ReplicaModifications:
-                Status: Disabled
+#            SourceSelectionCriteria:
+#              ReplicaModifications:
+#                Status: Disabled
+#                Status: Disabled
 
   EgressBucketBackupRole:
     Type: 'AWS::IAM::Role'
