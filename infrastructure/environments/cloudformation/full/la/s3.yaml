@@ -143,12 +143,22 @@ Resources:
             Principal:
               AWS: !Ref OrgAccountRoleArn
             Action:
-              - "s3:GetObject"
+              - "s3:ListBucketMultipartUploads"
+              - "s3:GetObjectVersionTagging"
+              - "s3:ListBucketVersions"
+              - "s3:GetObjectAttributes"
+              - "s3:PutObjectVersionTagging"
               - "s3:ListBucket"
               - "s3:GetBucketAcl"
+              - "s3:GetObjectVersionAttributes"
+              - "s3:PutObject"
               - "s3:GetObjectAcl"
-              - "s3:GetObjectAttributes"
+              - "s3:GetObject"
+              - "s3:GetObjectVersionAcl"
               - "s3:GetObjectTagging"
+              - "s3:PutObjectTagging"
+              - "s3:GetBucketLocation"
+              - "s3:GetObjectVersion"
             Resource:
               - !Sub "${SharedBucket.Arn}/*"
               - !Ref SharedBucket.Arn
