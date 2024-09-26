@@ -125,6 +125,7 @@ Resources:
           - Action:
               - 's3:GetObjectVersion'
               - 's3:GetObjectVersionAcl'
+              - 's3:GetObject'
             Effect: Allow
             Resource:
               - !Join
@@ -134,6 +135,8 @@ Resources:
           - Action:
               - 's3:ReplicateObject'
               - 's3:ReplicateDelete'
+              - 's3:GetObject'
+              - 's3:PutObject'
             Effect: Allow
             Resource:
               - !Join
@@ -240,6 +243,7 @@ Resources:
           - Action:
               - 's3:GetObjectVersion'
               - 's3:GetObjectVersionAcl'
+              - 's3:GetObject'
             Effect: Allow
             Resource:
               - !Join
@@ -249,6 +253,8 @@ Resources:
           - Action:
               - 's3:ReplicateObject'
               - 's3:ReplicateDelete'
+              - 's3:GetObject'
+              - 's3:PutObject'
             Effect: Allow
             Resource:
               - !Join
