@@ -119,9 +119,14 @@ Resources:
           - Destination:
               Bucket: !GetAtt EgressBackup.Arn
               StorageClass: STANDARD
+              Metrics:
+                Status: Enabled
             Id: Backup
             Prefix: ''
             Status: Enabled
+            SourceSelectionCriteria:
+              ReplicaModifications:
+                Status: Disabled
 
   EgressBucketBackupRole:
     Type: 'AWS::IAM::Role'

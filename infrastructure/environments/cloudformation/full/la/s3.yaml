@@ -96,9 +96,14 @@ Resources:
           - Destination:
               Bucket: !GetAtt DataStoreBackup.Arn
               StorageClass: STANDARD
+              Metrics:
+                Status: Enabled
             Id: Backup
             Prefix: ''
             Status: Enabled
+            SourceSelectionCriteria:
+              ReplicaModifications:
+                Status: Disabled
 
   DataStoreBucketBackupRole:
     Type: 'AWS::IAM::Role'
@@ -214,9 +219,14 @@ Resources:
           - Destination:
               Bucket: !GetAtt SharedBackup.Arn
               StorageClass: STANDARD
+              Metrics:
+                Status: Enabled
             Id: Backup
             Prefix: ''
             Status: Enabled
+            SourceSelectionCriteria:
+              ReplicaModifications:
+                Status: Disabled
 
   SharedBucketBackupRole:
     Type: 'AWS::IAM::Role'
