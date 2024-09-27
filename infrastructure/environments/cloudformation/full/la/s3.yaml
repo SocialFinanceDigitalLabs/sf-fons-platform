@@ -46,6 +46,19 @@ Conditions:
       - true
 
 Resources:
+  DataStoreBackup:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-data-store-${OrganisationName}-${Environment}-backup"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+
+
   DataStoreBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
@@ -75,6 +88,67 @@ Resources:
             AllowedOrigins:
               - !Ref WebsiteConnectionOriginUrl
             Id: IngressRule
+      VersioningConfiguration:
+        Status: Enabled
+      ReplicationConfiguration:
+        Role: !GetAtt DataStoreBucketBackupRole.Arn
+        Rules:
+          - Destination:
+              Bucket: !GetAtt DataStoreBackup.Arn
+              StorageClass: STANDARD
+            Id: Backup
+            Prefix: ''
+            Status: Enabled
+#            SourceSelectionCriteria:
+#              ReplicaModifications:
+#                Status: Disabled
+
+  DataStoreBucketBackupRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+
+  DataStoreBucketBackupPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetReplicationConfiguration'
+              - 's3:ListBucket'
+            Effect: Allow
+            Resource: !GetAtt DataStoreBucket.Arn
+          - Action:
+              - 's3:GetObjectVersion'
+              - 's3:GetObjectVersionAcl'
+              - 's3:GetObject'
+            Effect: Allow
+            Resource:
+              - !Join
+                - ''
+                - - !GetAtt DataStoreBucket.Arn
+                  - "/*"
+          - Action:
+              - 's3:ReplicateObject'
+              - 's3:ReplicateDelete'
+              - 's3:GetObject'
+              - 's3:PutObject'
+            Effect: Allow
+            Resource:
+              - !Join
+                - ''
+                - - !GetAtt DataStoreBackup.Arn
+                  - "/*"
+      PolicyName: DataStoreBucketBackupPolicy
+      Roles:
+        - !Ref DataStoreBucketBackupRole
 
   WorkspaceBucket:
     Type: 'AWS::S3::Bucket'
@@ -94,6 +168,17 @@ Resources:
               NoncurrentVersionExpirationInDays: !Ref AutoFileDeletion
               Status: 'Enabled'
 
+  SharedBackup:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-shared-${OrganisationName}-${Environment}-backup"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
 
   SharedBucket:
     Type: 'AWS::S3::Bucket'
@@ -124,6 +209,67 @@ Resources:
             AllowedOrigins:
               - !Ref WebsiteConnectionOriginUrl
             Id: SharedRule
+      VersioningConfiguration:
+        Status: Enabled
+      ReplicationConfiguration:
+        Role: !GetAtt SharedBucketBackupRole.Arn
+        Rules:
+          - Destination:
+              Bucket: !GetAtt SharedBackup.Arn
+              StorageClass: STANDARD
+            Id: Backup
+            Prefix: ''
+            Status: Enabled
+#            SourceSelectionCriteria:
+#              ReplicaModifications:
+#                Status: Disabled
+
+  SharedBucketBackupRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+
+  SharedBucketBackupPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetReplicationConfiguration'
+              - 's3:ListBucket'
+            Effect: Allow
+            Resource: !GetAtt SharedBucket.Arn
+          - Action:
+              - 's3:GetObjectVersion'
+              - 's3:GetObjectVersionAcl'
+              - 's3:GetObject'
+            Effect: Allow
+            Resource:
+              - !Join
+                - ''
+                - - !GetAtt SharedBucket.Arn
+                  - "/*"
+          - Action:
+              - 's3:ReplicateObject'
+              - 's3:ReplicateDelete'
+              - 's3:GetObject'
+              - 's3:PutObject'
+            Effect: Allow
+            Resource:
+              - !Join
+                - ''
+                - - !GetAtt SharedBackup.Arn
+                  - "/*"
+      PolicyName: SharedBucketBackupPolicy
+      Roles:
+        - !Ref SharedBucketBackupRole
 
   SharedBucketAccessPolicy:
     Type: AWS::S3::BucketPolicy
@@ -138,7 +284,10 @@ Resources:
                 - ec2.amazonaws.com
             Action: "s3:GetObject"
             Resource:
-              - !Sub "${SharedBucket.Arn}/*"
+              - !Join
+                - ''
+                - - !GetAtt SharedBucket.Arn
+                  - "/*"
           - Effect: Allow
             Principal:
               AWS: !Ref OrgAccountRoleArn
@@ -150,8 +299,11 @@ Resources:
               - "s3:GetObjectAttributes"
               - "s3:GetObjectTagging"
             Resource:
-              - !Sub "${SharedBucket.Arn}/*"
-              - !Ref SharedBucket.Arn
+              - !Join
+                - ''
+                - - !GetAtt SharedBucket.Arn
+                  - "/*"
+              - !GetAtt SharedBucket.Arn
 
 
   IngressStorageRole:
@@ -233,7 +385,11 @@ Resources:
                   - "s3:PutObject"
                   - "s3:GetObject"
                   - "s3:DeleteObject"
-                Resource: !Sub "${SharedBucket.Arn}/*"
+                Resource:
+                  - !Join
+                    - ''
+                    - - !GetAtt SharedBucket.Arn
+                      - "/*"
 
 Outputs:
   IngressBucketName:
