@@ -1,17 +1,23 @@
-version: "3.8"
-
 services:
   # This service runs the postgres DB used by dagster for run storage, schedule storage,
   # and event log storage.
   postgres:
+    env_file:
+      - .env
     image: postgres:11
     container_name: postgres
+    expose:
+      - "5432"
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: ${DAGSTER_POSTGRES_USER}
       POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD}
       POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
-      - network
+      - dagster_network
 
   # This service runs the gRPC server that loads your user code, in both dagit
   # and dagster-daemon. By setting DAGSTER_CURRENT_IMAGE to its own image, we tell the
@@ -20,9 +26,13 @@ services:
   # its own port, and have its own entry in the workspace.yaml file that's loaded by dagit.
   user_code:
     env_file:
-      - .env.staging
+      - .env
     container_name: user_code
-    image: code-server #mathewpugh/fons-code-server:latest
+    expose:
+      - "4000"
+    ports:
+      - "4000:4000"
+    image: sfdl/fons-code-server-org:latest   #sfdl/fons-code-server-client:latest
     restart: always
     environment:
       DAGSTER_POSTGRES_HOST: ${DAGSTER_POSTGRES_HOST}
@@ -31,15 +41,19 @@ services:
       DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
       DAGSTER_POSTGRES_PORT: ${DAGSTER_POSTGRES_PORT}
       DAGSTER_CURRENT_IMAGE: "user_code_image"
+      INPUT_LOCATION: ${INPUT_LOCATION}
+      WORKSPACE_LOCATION: ${WORKSPACE_LOCATION}
+      SHARED_LOCATION: ${SHARED_LOCATION}
+      EXTERNAL_DATA_LOCATION: ${EXTERNAL_DATA_LOCATION}
     networks:
-      - network
+      - dagster_network
 
   # This service runs dagit, which loads your user code from the user code container.
   # Since our instance uses the QueuedRunCoordinator, any runs submitted from dagit will be put on
   # a queue and later dequeued and launched by dagster-daemon.
   dagit:
     env_file:
-      - .env.staging
+      - .env
     build:
       context: .
       dockerfile: ./Dockerfile_dagster
@@ -65,17 +79,17 @@ services:
     volumes: # Make docker client accessible so we can terminate containers from dagit
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
-    networks:
-      - network
     depends_on:
       - postgres
       - user_code
+    networks:
+      - dagster_network
 
   # This service runs the dagster-daemon process, which is responsible for taking runs
   # off of the queue and launching them, as well as creating runs from schedules or sensors.
   daemon:
     env_file:
-      - .env.staging
+      - .env
     build:
       context: .
       dockerfile: ./Dockerfile_dagster
@@ -91,18 +105,21 @@ services:
       DAGSTER_POSTGRES_DB: ${DAGSTER_POSTGRES_DB}
       DAGSTER_POSTGRES_PORT: ${DAGSTER_POSTGRES_PORT}
       PYTHONLEGACYWINDOWSSTDIO: utf8.env
-      INCOMING_LOCATION: ${INCOMING_LOCATION}
-      OUTPUT_LOCATION: ${OUTPUT_LOCATION}
     volumes: # Make docker client accessible so we can launch containers using host docker
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
-    networks:
-      - network
     depends_on:
       - postgres
       - user_code
+    networks:
+      - dagster_network
+
+volumes:
+  dwh:
+  postgres_data:
+    name: dagster_postgres_volume
 
 networks:
-  network:
+  dagster_network:
     driver: bridge
-    name: network
+    name: dagster_network

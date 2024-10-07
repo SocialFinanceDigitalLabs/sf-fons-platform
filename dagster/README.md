@@ -38,13 +38,17 @@ end
 
 
 ### Dagit
-This is the web interface for Dagster that allows for viewing and interacting with Dagster objects. More 
+This is the web interface for Dagster that allows for viewing and interacting with Dagster objects. 
+This is built and pushed to docker hub for use with the wider platform. More 
 [info here](https://docs.dagster.io/concepts/dagit/dagit)
 ### Dagster Daemon
-Determines what needs to be run and when using schedulers, sensors, etc. More 
+Determines what needs to be run and when using schedulers, sensors, etc. This is built and pushed to 
+docker hub for use with the wider platform. More 
 [info here](https://docs.dagster.io/deployment/dagster-daemon)
 ### User Code Server
 This contains the pipeline code for Dagster to run. This includes sensors, ops, assets, jobs, 
-schedule definitions, etc. More 
+schedule definitions, etc. More. The one used in this repo is for demo purposes only and isn't part of 
+any wider build or running of the platform.
+
 [info here](https://docs.dagster.io/concepts/code-locations/workspace-files#running-your-own-grpc-server)
 
