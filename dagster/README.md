@@ -47,7 +47,7 @@ docker hub for use with the wider platform. More
 [info here](https://docs.dagster.io/deployment/dagster-daemon)
 ### User Code Server
 This contains the pipeline code for Dagster to run. This includes sensors, ops, assets, jobs, 
-schedule definitions, etc. More. The one used in this repo is for demo purposes only and isn't part of 
+schedule definitions, etc. The one used in this repo is for demo purposes only and isn't part of 
 any wider build or running of the platform.
 
 [info here](https://docs.dagster.io/concepts/code-locations/workspace-files#running-your-own-grpc-server)
