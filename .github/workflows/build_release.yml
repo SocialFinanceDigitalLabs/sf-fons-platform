@@ -37,11 +37,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-<<<<<<< Updated upstream
-          file: ./Dockerfile_LA
-=======
           file: ./Dockerfile_dagster
->>>>>>> Stashed changes
           push: true
-          tags: ${{ secrets.DOCKERHUB_DAGSTER_SERVER_URL }}:latest
+          tags: ${{ secrets.DOCKERHUB_DAGSTER_SERVER_URL }}:${{ github.ref_name }}
           labels: ${{ steps.meta.outputs.labels }}
