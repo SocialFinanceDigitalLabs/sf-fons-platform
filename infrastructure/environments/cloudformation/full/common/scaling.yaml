@@ -6,7 +6,7 @@ Parameters:
   DaemonServiceName:
     Type: String
     Description: Name for the Dagster Daemon Service
-  DaemonServiceArn:
+  DaemonServiceARN:
     Type: String
     Description: ARN for the Dagster Daemon Service
   DagitServiceName:
@@ -24,8 +24,58 @@ Parameters:
   ECSClusterName:
     Type: String
     Description: Name for the ECS Dagster Service
+  TimeOn:
+    Type: String
+    Description: Time to turn the pipeline on (e.g., 23 for 11pm)
+    Default: 23
+  TimeOff:
+    Type: String
+    Description: Time to turn the pipeline off (e.g., 23 for 11pm, 5 for 5am)
+    Default: 5
+  Environment:
+    Type: String
+    Description: |
+      Determines the type of environment. "stag" and "prod" are the two valid strings. Stag will auto-deploy
+      new versions, while prod will only deploy the cached versions and updates will need to be applied through
+      infrastructure updates.
+    Default: prod
+  OrganisationName:
+    Type: String
+    Description: Name of the organisation running this service
+  ProjectName:
+    Type: String
+    Description: Name of the application
+    Default: fons
 
 Resources:
+  CloudWatchEventsTurnOnRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: DagsterTurnOnRule
+      ScheduleExpression: !Sub "cron(0 0 ${TimeOn} * * MON-FRI)"
+      Targets:
+        - Id: 'ScalingLambda'
+          Arn: !GetAtt FonsScalingLambda.Arn
+          Input: '{ "pipelineStatus": "true" }'
+          InputTransformer:
+            InputPaths:
+              - $.pipelineStatus
+            InputTemplate: '{ "pipelineStatus": "$." }'
+
+  CloudWatchEventsTurnOffRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: DagsterTurnOffRule
+      ScheduleExpression: !Sub "cron(0 0 ${TimeOff} * * MON-FRI)"
+      Targets:
+        - Id: 'ScalingLambda'
+          Arn: !GetAtt FonsScalingLambda.Arn
+          Input: '{ "pipelineStatus": "false" }'
+          InputTransformer:
+            InputPaths:
+              - $.pipelineStatus
+            InputTemplate: '{ "pipelineStatus": "$." }'
+
   FonsDagsterScalingLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -49,13 +99,13 @@ Resources:
                   - !Ref DagitServiceARN
                   - !Ref CodeServerServiceARN
 
-  FonsScalingUpLambda:
+  FonsScalingLambda:
     Type: AWS::Lambda::Function
     Properties:
       Code:
         S3Bucket: !Ref LambdaCodeBucket
-        S3Key: scaling-up-lambda.zip
-      Role: !GetAtt MyScalingLambdaRole.Arn
+        S3Key: ecs-scaling-lambda.zip
+      Role: !GetAtt FonsDagsterScalingLambdaRole.Arn
       Handler: index.lambda_handler
       Runtime: python3.11
       Timeout: 300
@@ -65,50 +115,12 @@ Resources:
           ECS_DAGIT_SERVICE_NAMES: !Ref DagitServiceName
           ECS_DAEMON_SERVICE_NAMES: !Ref DaemonServiceName
           ECS_CODE_SERVER_SERVICE_NAMES: !Ref CodeServerServiceName
-
-  FonsScalingDownLambda:
-    Type: AWS::Lambda::Function
-    Properties:
-      Code:
-        S3Bucket: !Ref LambdaCodeBucket
-        S3Key: scaling-down-lambda.zip
-      Role: !GetAtt MyScalingLambdaRole.Arn
-      Handler: index.lambda_handler
-      Runtime: python3.11
-      Timeout: 300
-      Environment:
-        Variables:
-          ECS_CLUSTER_NAME: !Ref ECSClusterName
-          ECS_DAGIT_SERVICE_NAMES: !Ref DagitServiceName
-          ECS_DAEMON_SERVICE_NAMES: !Ref DaemonServiceName
-          ECS_CODE_SERVER_SERVICE_NAMES: !Ref CodeServerServiceName
-
-  FonsScalingUpRule:
-    Type: AWS::Events::Rule
-    Properties:
-      ScheduleExpression: "cron(30 23 * * ?)"
-      Name: Fons Scaling Up Rule
-      Description: Trigger Lambda function at 23:30 PM every day
-      RoleArn: !Ref FonsDagsterScalingLambdaRole
-      Targets:
-        - Id: !Ref FonsScalingUpLambda
-          Arn: !GetAtt FonsScalingUpLambda.Arn
-
-  FonsScalingDownRule:
-    Type: AWS::Events::Rule
-    Properties:
-      ScheduleExpression: "cron(0 6 * * ?)"
-      Name: Fons Scaling Down Rule
-      Description: Trigger Lambda function at 6:00 AM every day
-      RoleArn: !Ref FonsDagsterScalingLambdaRole
-      Targets:
-        - Id: !Ref FonsScalingUpLambda
-          Arn: !GetAtt FonsScalingUpLambda.Arn
+          ENVIRONMENT: !Ref Environment
 
   LambdaCodeBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
-      BucketName: !Sub "${AppName}-lambda-code-${OrganisationName}-${Environment}"
+      BucketName: !Sub "${ProjectName}-lambda-code-${OrganisationName}-${Environment}"
       AccessControl: Private
       BucketEncryption:
         ServerSideEncryptionConfiguration:
