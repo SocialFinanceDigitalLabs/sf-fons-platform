@@ -37,7 +37,6 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          working-directory: ./dagster
           file: ./Dockerfile_dagster
           push: true
           tags: ${{ secrets.DOCKERHUB_DAGSTER_SERVER_URL }}:latest
