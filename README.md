@@ -17,3 +17,7 @@ doesn't rely on this.
 
 ## Infrastructure
 Documentation on the infrastructure can be found [here](./docs/infrastructure-diagrams/README.md)
+
+## Dagit/Daemon 
+Code in the dagster folder [here](./dagster/README.md) is what is used to run the dagit and daemon interfaces
+on the platform. Code servers can then be hooked in and are part of different repos as needed.

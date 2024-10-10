@@ -52,6 +52,7 @@ Resources:
         - "openid"
         - "email"
         - "aws.cognito.signin.user.admin"
+        - "profile"
       SupportedIdentityProviders:
         - !Sub "${ApplicationName}-${OrganisationName}-AzureADProvider-${EnvironmentName}"
       AllowedOAuthFlowsUserPoolClient: true
