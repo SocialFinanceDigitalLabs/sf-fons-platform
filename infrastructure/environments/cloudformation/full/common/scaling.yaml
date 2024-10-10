@@ -46,35 +46,30 @@ Parameters:
     Type: String
     Description: Name of the application
     Default: fons
+  LambdaCodeBucket:
+    Type: String
+    Description: Name of the bucket that stores the lambda code
 
 Resources:
   CloudWatchEventsTurnOnRule:
     Type: AWS::Events::Rule
     Properties:
       Name: DagsterTurnOnRule
-      ScheduleExpression: !Sub "cron(0 0 ${TimeOn} * * MON-FRI)"
+      ScheduleExpression: !Sub "cron(0 ${TimeOn} ? * MON-FRI *)"
       Targets:
         - Id: 'ScalingLambda'
           Arn: !GetAtt FonsScalingLambda.Arn
           Input: '{ "pipelineStatus": "true" }'
-          InputTransformer:
-            InputPaths:
-              - $.pipelineStatus
-            InputTemplate: '{ "pipelineStatus": "$." }'
 
   CloudWatchEventsTurnOffRule:
     Type: AWS::Events::Rule
     Properties:
       Name: DagsterTurnOffRule
-      ScheduleExpression: !Sub "cron(0 0 ${TimeOff} * * MON-FRI)"
+      ScheduleExpression: !Sub "cron(0 ${TimeOff} ? * MON-FRI *)"
       Targets:
         - Id: 'ScalingLambda'
           Arn: !GetAtt FonsScalingLambda.Arn
           Input: '{ "pipelineStatus": "false" }'
-          InputTransformer:
-            InputPaths:
-              - $.pipelineStatus
-            InputTemplate: '{ "pipelineStatus": "$." }'
 
   FonsDagsterScalingLambdaRole:
     Type: AWS::IAM::Role
@@ -106,7 +101,7 @@ Resources:
         S3Bucket: !Ref LambdaCodeBucket
         S3Key: ecs-scaling-lambda.zip
       Role: !GetAtt FonsDagsterScalingLambdaRole.Arn
-      Handler: index.lambda_handler
+      Handler: lambda_handler
       Runtime: python3.11
       Timeout: 300
       Environment:
@@ -116,13 +111,3 @@ Resources:
           ECS_DAEMON_SERVICE_NAMES: !Ref DaemonServiceName
           ECS_CODE_SERVER_SERVICE_NAMES: !Ref CodeServerServiceName
           ENVIRONMENT: !Ref Environment
-
-  LambdaCodeBucket:
-    Type: 'AWS::S3::Bucket'
-    Properties:
-      BucketName: !Sub "${ProjectName}-lambda-code-${OrganisationName}-${Environment}"
-      AccessControl: Private
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256

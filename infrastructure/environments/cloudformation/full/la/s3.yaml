@@ -401,6 +401,16 @@ Resources:
                     - - !GetAtt SharedBucket.Arn
                       - "/*"
 
+  LambdaCodeBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-lambda-code-${OrganisationName}-${Environment}"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
 Outputs:
   IngressBucketName:
     Value: !Ref DataStoreBucket
@@ -429,3 +439,6 @@ Outputs:
   SharedRoleARN:
     Value: !GetAtt SharedStorageRole.Arn
     Description: ARN of the role used to access the data store bucket
+  LambdaCodeBucket:
+    Value: !Ref LambdaCodeBucket
+    Description: Name of the Code Bucket to store lambda functions

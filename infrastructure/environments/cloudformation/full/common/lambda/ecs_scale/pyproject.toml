@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "ecs_scale_down"
+name = "ecs_scale"
 version = "0.1.0"
 description = "A lambda to scale down ECS services for the data platform"
 authors = ["Matthew Pugh <pughmds@cyram.org>"]
