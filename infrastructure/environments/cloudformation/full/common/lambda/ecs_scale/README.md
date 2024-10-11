@@ -1,7 +1,7 @@
 # Scaling Lambda
 
 ## Manual Process
-To pakcage this, do the following:
+To package this, do the following:
 
 1. If it doesn't exist, make the package directory
 ```commandline
