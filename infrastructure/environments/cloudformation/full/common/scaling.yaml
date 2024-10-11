@@ -101,9 +101,9 @@ Resources:
         S3Bucket: !Ref LambdaCodeBucket
         S3Key: ecs-scaling-lambda.zip
       Role: !GetAtt FonsDagsterScalingLambdaRole.Arn
-      Handler: lambda_handler
+      Handler: handler.lambda_handler
       Runtime: python3.11
-      Timeout: 300
+      Timeout: 60
       Environment:
         Variables:
           ECS_CLUSTER_NAME: !Ref ECSClusterName
