@@ -5,9 +5,9 @@ import logging
 
 def lambda_handler(event, context):
     # Will be fed by the event rule if the pipeline is to be turned on or off
-    if event['pipelineStatus'] == "true":
+    if event["pipelineStatus"] == "true":
         pipeline_count = 1
-    elif event['pipelineStatus'] == "false":
+    elif event["pipelineStatus"] == "false":
         pipeline_count = 0
 
     # On staging systems, we want to make sure to reload the pipeline every time.
@@ -32,9 +32,14 @@ def lambda_handler(event, context):
     for service in (dagit_service, daemon_service, code_service):
         try:
             response = ecs_client.update_service(
-                cluster=cluster, service=service, desiredCount=pipeline_count, forceNewDeployment=force_new_deployment
+                cluster=cluster,
+                service=service,
+                desiredCount=pipeline_count,
+                forceNewDeployment=force_new_deployment,
             )
-            logger.info(f"Successfully scaled Service {service} to {pipeline_count}: {response}")
+            logger.info(
+                f"Successfully scaled Service {service} to {pipeline_count}: {response}"
+            )
         except Exception as e:
             logger.error(f"Could not Scale Service {service} to {pipeline_count}: {e}")
             continue
