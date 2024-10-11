@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECS Service with Auto-Scaling
+
+
+Parameters:
+  DaemonServiceName:
+    Type: String
+    Description: Name for the Dagster Daemon Service
+  DaemonServiceARN:
+    Type: String
+    Description: ARN for the Dagster Daemon Service
+  DagitServiceName:
+    Type: String
+    Description: Name for the Dagit Service
+  DagitServiceARN:
+    Type: String
+    Description: ARN for the Dagit Service
+  CodeServerServiceName:
+    Type: String
+    Description: Name for the Dagit Service
+  CodeServerServiceARN:
+    Type: String
+    Description: ARN for the Dagit Service
+  ECSClusterName:
+    Type: String
+    Description: Name for the ECS Dagster Service
+  TimeOn:
+    Type: String
+    Description: Time to turn the pipeline on (e.g., 23 for 11pm)
+    Default: 23
+  TimeOff:
+    Type: String
+    Description: Time to turn the pipeline off (e.g., 23 for 11pm, 5 for 5am)
+    Default: 5
+  Environment:
+    Type: String
+    Description: |
+      Determines the type of environment. "stag" and "prod" are the two valid strings. Stag will auto-deploy
+      new versions, while prod will only deploy the cached versions and updates will need to be applied through
+      infrastructure updates.
+    Default: prod
+  OrganisationName:
+    Type: String
+    Description: Name of the organisation running this service
+  ProjectName:
+    Type: String
+    Description: Name of the application
+    Default: fons
+  LambdaCodeBucket:
+    Type: String
+    Description: Name of the bucket that stores the lambda code
+
+Resources:
+  CloudWatchEventsTurnOnRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: DagsterTurnOnRule
+      ScheduleExpression: !Sub "cron(0 ${TimeOn} ? * MON-FRI *)"
+      Targets:
+        - Id: 'ScalingLambda'
+          Arn: !GetAtt FonsScalingLambda.Arn
+          Input: '{ "pipelineStatus": "true" }'
+
+  CloudWatchEventsTurnOffRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: DagsterTurnOffRule
+      ScheduleExpression: !Sub "cron(0 ${TimeOff} ? * MON-FRI *)"
+      Targets:
+        - Id: 'ScalingLambda'
+          Arn: !GetAtt FonsScalingLambda.Arn
+          Input: '{ "pipelineStatus": "false" }'
+
+  FonsDagsterScalingLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: ECSScalingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                Resource:
+                  - !Ref DaemonServiceARN
+                  - !Ref DagitServiceARN
+                  - !Ref CodeServerServiceARN
+
+  FonsScalingLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: ecs-scaling-lambda.zip
+      Role: !GetAtt FonsDagsterScalingLambdaRole.Arn
+      Handler: handler.lambda_handler
+      Runtime: python3.11
+      Timeout: 60
+      Environment:
+        Variables:
+          ECS_CLUSTER_NAME: !Ref ECSClusterName
+          ECS_DAGIT_SERVICE_NAMES: !Ref DagitServiceName
+          ECS_DAEMON_SERVICE_NAMES: !Ref DaemonServiceName
+          ECS_CODE_SERVER_SERVICE_NAMES: !Ref CodeServerServiceName
+          ENVIRONMENT: !Ref Environment
