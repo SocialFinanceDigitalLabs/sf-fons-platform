@@ -439,6 +439,7 @@ Resources:
                   - "s3:GetObjectVersion"
                 Resource:
                   - !Ref InputLocationArn
+                  - !Sub "${InputLocationArn}/*"
 
       ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
