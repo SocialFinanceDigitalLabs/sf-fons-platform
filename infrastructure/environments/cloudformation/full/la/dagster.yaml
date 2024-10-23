@@ -479,14 +479,8 @@ Resources:
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
               Value: !Ref DBPort
-            - Name: OUTPUT_LOCATION
-              Value: !Ref OutputLocation
-            - Name: INPUT_LOCATION
-              Value: !Ref InputLocation
             - Name: PYTHONLEGACYWINDOWSSTDIO
               Value: "utf8.env"
-            - Name: 903_WILDCARDS
-              Value: "*.csv"
             - Name: DAGSTER_CODE_SERVER_TASK
               Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
       Tags:
@@ -546,18 +540,8 @@ Resources:
               Value: !Ref DBPort
             - Name: DAGSTER_CODE_SERVER_TASK
               Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
-            - Name: OUTPUT_LOCATION
-              Value: !Ref OutputLocation
-            - Name: INPUT_LOCATION
-              Value: !Ref InputLocation
             - Name: PYTHONLEGACYWINDOWSSTDIO
               Value: "utf8.env"
-            - Name: 903_WILDCARDS
-              Value: "*.csv"
-            - Name: INPUT_LOCATION_903
-              Value: !Sub "${OutputLocation}/Current"
-            - Name: INPUT_LOCATION
-              Value: !Ref InputLocation
       Tags:
         - Key: Project
           Value: !Ref ProjectName
