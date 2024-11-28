@@ -37,8 +37,6 @@ Resources:
           RequireSymbols: true
       VerificationMessageTemplate:
         DefaultEmailOption: CONFIRM_WITH_LINK
-      LambdaConfig:
-        PostConfirmation: !Ref GroupAssignLambda
 
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain

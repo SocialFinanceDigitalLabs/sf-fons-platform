@@ -7,9 +7,6 @@ Parameters:
   DataStoreLocationArn:
     Description: The S3 Bucket users will have access to for uploading files
     Type: String
-  LambdaCodeBucket:
-    Description: Bucket where code is located for Lambda functions
-    Type: String
   CognitoUserPool:
     Description: ID of the User Pool to add the triggers to
     Type: String
