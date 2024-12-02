@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  |
+  This template adds cognito triggers to handle post-authentication tasks
+
+
+Parameters:
+  DataStoreLocationArn:
+    Description: The S3 Bucket users will have access to for uploading files
+    Type: String
+  CognitoUserPool:
+    Description: ID of the User Pool to add the triggers to
+    Type: String
+  Environment:
+    Type: String
+    Description: |
+      Determines the type of environment. "stag" and "prod" are the two valid strings. Stag will auto-deploy
+      new versions, while prod will only deploy the cached versions and updates will need to be applied through
+      infrastructure updates.
+    Default: prod
+
+Resources:
+  FrontendUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: "frontend-hosting-user"
+
+  GeneralUserPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: GeneralUserPolicy
+      Users:
+        - !Ref FrontendUser
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - "s3:DeleteObject"
+              - "s3:GetObject"
+              - "s3:ListBucket"
+              - "s3:PutObject"
+              - "s3:PutObjectAcl"
+            Resource:
+              - !Sub "${DataStoreLocationArn}"
+              - !Sub "${DataStoreLocationArn}/*"
+
+
+  AccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName:
+        Ref: FrontendUser
+
+Outputs:
+  AccessKeyId:
+    Description: "AWS Access Key ID"
+    Value: !Ref AccessKey
+  SecretAccessKey:
+    Description: "AWS Secret Access Key"
+    Value: !GetAtt AccessKey.SecretAccessKey
