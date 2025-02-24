@@ -18,21 +18,21 @@ The current design is spin up several images as follows:
 ```mermaid
 graph TB;
 
-subgraph one[Core AWS Account]
-A[Dagit ECR]
-B[Dagster Daemon]
+subgraph one[Docker Hub]
+A[Dagster Image]
+G[Code Server Image]
 end
 
-subgraph two[LA1 AWS Account]
+subgraph two[LA AWS Account]
 A-->C[Dagit Live]
-B-->D[Daemon Live]
-G[Code Server Image]-->H[Code Server Live]
+A-->D[Daemon Live]
+G-->H[Code Server Live]
 end
 
-subgraph three[LA2 AWS Account]
+subgraph three[Org/Hub AWS Account]
 A-->E[Dagit Live]
-B-->F[Daemon Live]
-I[Code Server Image]-->J[Code Server Live]
+A-->F[Daemon Live]
+G-->J[Code Server Live]
 end
 ```
 
@@ -50,5 +50,38 @@ This contains the pipeline code for Dagster to run. This includes sensors, ops, 
 schedule definitions, etc. The one used in this repo is for demo purposes only and isn't part of 
 any wider build or running of the platform.
 
+Code servers can be a way to isolate environments and multiple can exist in an implementation. For instance, 
+if you have multiple pipelines that each require different versions of python libraries, 
+you could put them into separate code servers.
+
+A code server is defined using `workspace.yaml` Inside, you will see instructions such as this:
+```yaml
+  - grpc_server:
+      host: user_code
+      port: 4000
+      location_name: "user_code"
+```
+
+You could create multiple code servers like this:
+```yaml
+  - grpc_server:
+      host: user_code
+      port: 4000
+      location_name: "user_code"
+  - grpc_server2:
+      host: user_code2
+      port: 4001
+      location_name: "user_code2"
+```
+
+The dagster implementation will look for images running on that
+port with that name to send instructions to. The rest of the
+configuration of dagster is contained in the `dagster.yaml` file.
+
 [info here](https://docs.dagster.io/concepts/code-locations/workspace-files#running-your-own-grpc-server)
 
+## Dagster.yaml
+
+The dagster file contains instructions on how to run Dagster. 
+Instructions on how to edit this file are on the [Dagster
+website](https://docs.dagster.io/guides/deploy/dagster-yaml)

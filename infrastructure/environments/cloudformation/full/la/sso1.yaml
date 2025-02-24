@@ -60,3 +60,5 @@ Outputs:
     Value: !Sub "urn:amazon:cognito:sp:${CognitoUserPool}"
   ReplyURL:
     Value: !Sub "https://${ApplicationName}-${OrganisationName}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com/saml2/idpresponse"
+  CognitoUserPoolId:
+    Value: !Ref CognitoUserPool

@@ -5,10 +5,7 @@ Description:  |
 
 Parameters:
   DataStoreLocationArn:
-    Description: The S3 Bucket users will have access to for uploading files
-    Type: String
-  CognitoUserPool:
-    Description: ID of the User Pool to add the triggers to
+    Description: The S3 Bucket users will have access to for accessing processed files (Egress for org, data store for la)
     Type: String
   Environment:
     Type: String
