@@ -48,9 +48,6 @@ Resources:
     Type: AWS::Cognito::IdentityPool
     Properties:
       IdentityPoolName: MyIdentityPool
-      #CognitoIdentityProviders:
-        #- ClientId: !Ref CognitoUserPoolClient
-        #  ProviderName: !GetAtt CognitoUserPool.ProviderName
       AllowUnauthenticatedIdentities: false
       OpenIdConnectProviderARNs:
         - "arn:aws:oidc:${AWS::Region}:${AWS::AccountId}:${CognitoUserPool}"

@@ -18,9 +18,15 @@ The current design is spin up several images as follows:
 ```mermaid
 graph TB;
 
+subgraph zero[Github]
+R[sf-fons-platform]
+S[liia-tools-pipeline]
+end
+
 subgraph one[Docker Hub]
-A[Dagster Image]
-G[Code Server Image]
+R-->A[Dagster Image]
+S--Using Dockerfile_LA-->G[Code Server Image]
+S--Using Dockerfile_Org-->B[Hub Code Server Image]
 end
 
 subgraph two[LA AWS Account]
@@ -32,7 +38,7 @@ end
 subgraph three[Org/Hub AWS Account]
 A-->E[Dagit Live]
 A-->F[Daemon Live]
-G-->J[Code Server Live]
+B-->J[Code Server Live]
 end
 ```
 
@@ -68,7 +74,7 @@ You could create multiple code servers like this:
       host: user_code
       port: 4000
       location_name: "user_code"
-  - grpc_server2:
+  - grpc_server:
       host: user_code2
       port: 4001
       location_name: "user_code2"
@@ -76,9 +82,13 @@ You could create multiple code servers like this:
 
 The dagster implementation will look for images running on that
 port with that name to send instructions to. The rest of the
-configuration of dagster is contained in the `dagster.yaml` file.
+configuration of dagster is contained in the `dagster.yaml` file. Note, if you
+do this with multiple code servers, you'll also need to make sure the 
+needed ports are allowed to communicate in the network, and the needed
+container is defined in the ECS task as well.
 
-[info here](https://docs.dagster.io/concepts/code-locations/workspace-files#running-your-own-grpc-server)
+More info about the GRPC Server and the Workspace.yaml file is 
+[here](https://docs.dagster.io/concepts/code-locations/workspace-files#running-your-own-grpc-server)
 
 ## Dagster.yaml
 
