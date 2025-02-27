@@ -24,7 +24,7 @@ postcode, etc) to create output that can be used for analysis at a regional leve
 
 In order to set this up, use the full directory in the cloudformation folder. Bring the infrastructure up in the following order:
 1. Organisation
-   1. organisation/ids.yaml
+   1. common/ids.yaml
    2. organisation/sso1.yaml 
       * Send the output to the controlling organisation for their SSO setup (entity id and reply URL only)
       * Run SSO 2 when details are returned
@@ -35,7 +35,7 @@ In order to set this up, use the full directory in the cloudformation folder. Br
    6. orgamisation/dagster.yaml
    7. common/scaling.yaml
 2. LA (taking the organisation account id as an input to allow access to the shared bucket.)
-   1. la/ids.yaml
+   1. common/ids.yaml
    2. la/sso1.yaml
       * Use the output of this to setup the azure application to hold users (same process as org) for 
       whoever will be managing LA users
