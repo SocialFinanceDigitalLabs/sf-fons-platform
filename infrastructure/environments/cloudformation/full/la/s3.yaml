@@ -220,9 +220,6 @@ Resources:
             Id: Backup
             Prefix: ''
             Status: Enabled
-#            SourceSelectionCriteria:
-#              ReplicaModifications:
-#                Status: Disabled
 
   SharedBucketBackupRole:
     Type: 'AWS::IAM::Role'
@@ -284,10 +281,7 @@ Resources:
                 - ec2.amazonaws.com
             Action: "s3:GetObject"
             Resource:
-              - !Join
-                - ''
-                - - !GetAtt SharedBucket.Arn
-                  - "/*"
+              - !Sub "${SharedBucket.Arn}/*"
           - Effect: Allow
             Principal:
               AWS: !Ref OrgAccountRoleArn
@@ -309,10 +303,7 @@ Resources:
               - "s3:GetBucketLocation"
               - "s3:GetObjectVersion"
             Resource:
-              - !Join
-                - ''
-                - - !GetAtt SharedBucket.Arn
-                  - "/*"
+              - !Sub "${SharedBucket.Arn}/*"
               - !GetAtt SharedBucket.Arn
 
 
@@ -396,10 +387,7 @@ Resources:
                   - "s3:GetObject"
                   - "s3:DeleteObject"
                 Resource:
-                  - !Join
-                    - ''
-                    - - !GetAtt SharedBucket.Arn
-                      - "/*"
+                  - !Sub "${SharedBucket.Arn}/*"
 
   LambdaCodeBucket:
     Type: 'AWS::S3::Bucket'

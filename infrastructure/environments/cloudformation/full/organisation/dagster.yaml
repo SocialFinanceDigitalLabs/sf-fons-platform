@@ -181,7 +181,7 @@ Parameters:
   PrivateServiceDiscoveryNamespace:
     Type: String
     Description: Namespace for private network.
-    Default: fons-namespace.local
+    Default: my-namespace.local
 
 Conditions:
   IsProd: !Equals [!Ref Environment, "prod"]

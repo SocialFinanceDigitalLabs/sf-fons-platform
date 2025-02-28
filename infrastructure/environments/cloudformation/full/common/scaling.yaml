@@ -17,10 +17,10 @@ Parameters:
     Description: ARN for the Dagit Service
   CodeServerServiceName:
     Type: String
-    Description: Name for the Dagit Service
+    Description: Name for the Code Server Service
   CodeServerServiceARN:
     Type: String
-    Description: ARN for the Dagit Service
+    Description: ARN for the Code Server Service
   ECSClusterName:
     Type: String
     Description: Name for the ECS Dagster Service

@@ -48,9 +48,6 @@ Resources:
     Type: AWS::Cognito::IdentityPool
     Properties:
       IdentityPoolName: MyIdentityPool
-      #CognitoIdentityProviders:
-        #- ClientId: !Ref CognitoUserPoolClient
-        #  ProviderName: !GetAtt CognitoUserPool.ProviderName
       AllowUnauthenticatedIdentities: false
       OpenIdConnectProviderARNs:
         - "arn:aws:oidc:${AWS::Region}:${AWS::AccountId}:${CognitoUserPool}"
@@ -60,3 +57,5 @@ Outputs:
     Value: !Sub "urn:amazon:cognito:sp:${CognitoUserPool}"
   ReplyURL:
     Value: !Sub "https://${ApplicationName}-${OrganisationName}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com/saml2/idpresponse"
+  CognitoUserPoolId:
+    Value: !Ref CognitoUserPool

@@ -10,7 +10,7 @@ Parameters:
 
   AppName:
     Type: String
-    Default: sfdata
+    Default: fons
     Description: The name for the application or instance.  LOWER CASE, NO SPACES
 
   OrganisationName:
