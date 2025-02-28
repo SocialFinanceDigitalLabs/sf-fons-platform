@@ -7,7 +7,7 @@ Here are the steps to setup SSO with the platform
 3. Find manage, then single sign-on
 4. Select SAML
 5. Enter in the `Entity ID` and the `Reply URL` from the sso1 step from the infrastructure
-6. You should see the following in the claims list:
+6. You should see the following in the claims list (many of these should already be present):
    * Display Name - Used to determine display name for user
      * Claim Name: `http://schemas.microsoft.com/identity/claims/displayname/name`
      * Value: user.displayname
