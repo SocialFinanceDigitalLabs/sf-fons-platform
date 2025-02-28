@@ -30,7 +30,7 @@ In order to set this up, use the full directory in the cloudformation folder. Br
       * Run SSO 2 when details are returned
    3. organisation/s3.yaml
    4. common/general_key_access.yaml
-      * Use the output from this to configure Heroku
+      * Use the output from this to configure Heroku env vars.
    5. organisation/VPC.yaml
    6. orgamisation/dagster.yaml
    7. common/scaling.yaml
@@ -42,9 +42,7 @@ In order to set this up, use the full directory in the cloudformation folder. Br
       * Run SSO 2 when details are returned
    3. la/s3.yaml
    4. common/general_key_access.yaml
-      * Use the output from this to configure Heroku
+      * Use the output from this to configure Heroku env vars.
    5. la/VPC.yaml
    6. la/dagster.yaml
    7. common/scaling.yaml
-
-Otherwise, the order of how files are applied in each account remains the same for the single account setup (above).
