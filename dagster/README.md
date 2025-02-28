@@ -30,23 +30,23 @@ S--Using Dockerfile_Org-->B[Hub Code Server Image]
 end
 
 subgraph two[LA AWS Account]
-A-->C[Dagit Live]
+A-->C[Webserver Live]
 A-->D[Daemon Live]
 G-->H[Code Server Live]
 end
 
 subgraph three[Org/Hub AWS Account]
-A-->E[Dagit Live]
+A-->E[Webserver Live]
 A-->F[Daemon Live]
 B-->J[Code Server Live]
 end
 ```
 
 
-### Dagit
-This is the web interface for Dagster that allows for viewing and interacting with Dagster objects. 
+### Dagster Webserver
+Formerly called dagit. This is the web interface for Dagster that allows for viewing and interacting with Dagster objects. 
 This is built and pushed to docker hub for use with the wider platform. More 
-[info here](https://docs.dagster.io/concepts/dagit/dagit)
+[info here](https://docs.dagster.io/guides/operate/webserver)
 ### Dagster Daemon
 Determines what needs to be run and when using schedulers, sensors, etc. This is built and pushed to 
 docker hub for use with the wider platform. More 
