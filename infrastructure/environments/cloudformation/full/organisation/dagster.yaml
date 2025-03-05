@@ -227,7 +227,7 @@ Resources:
                   - "ssm:GetParameters"
                   - "secretsmanager:GetSecretValue"
                 Resource:
-                  - !Sub "arn:aws:ecs:*:${AWS::AccountId}:task/*/*"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task/*/*"
                   - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/CodeServerTask:*"
               - Effect: Allow
                 Action:
