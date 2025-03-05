@@ -13,6 +13,10 @@ Parameters:
     Type: String
     Default: org
     Description: The name of the council, authority, or organisation this is for
+  LogRetentionTimeDays:
+    Type: String
+    Default: 30
+    Description: The number of days to store Cloudwatch Logs
 
   # Environment Parameters
   Environment:
@@ -192,19 +196,19 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "${ProjectName}-${OrganisationName}-Dagit-LogGroup-${Environment}"
-      RetentionInDays: 7
+      RetentionInDays: !Ref LogRetentionTimeDays
 
   CodeServerLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "${ProjectName}-${OrganisationName}-CodeServer-LogGroup-${Environment}"
-      RetentionInDays: 7
+      RetentionInDays: !Ref LogRetentionTimeDays
 
   DaemonLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "${ProjectName}-${OrganisationName}-Daemon-LogGroup-${Environment}"
-      RetentionInDays: 7
+      RetentionInDays: !Ref LogRetentionTimeDays
 
   # ECS Definition
   DagitTaskExecutionRole:
