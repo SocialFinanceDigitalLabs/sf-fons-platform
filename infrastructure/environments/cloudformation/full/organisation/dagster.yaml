@@ -125,6 +125,10 @@ Parameters:
     Type: String
     Default: db.serverless
     Description: Type of resources for the database to use. See https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Concepts.DBInstanceClass.html#Concepts.DBInstanceClass.Types.serverless-v2
+  DatabaseBackupRetentionPeriod:
+    Type: String
+    Default: 7
+    Description: Amount (in days) to keep database versions on disk
   DBEngine:
     Type: String
     Default: aurora-postgresql
@@ -745,6 +749,7 @@ Resources:
     Properties:
       Engine: !Ref DBEngine
       DBClusterIdentifier: !Ref DBName
+      BackupRetentionPeriod: !Ref DatabaseBackupRetentionPeriod
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
       StorageEncrypted: true
