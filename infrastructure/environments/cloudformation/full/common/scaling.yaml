@@ -71,6 +71,22 @@ Resources:
           Arn: !GetAtt FonsScalingLambda.Arn
           Input: '{ "pipelineStatus": "false" }'
 
+  FonsDagsterScalingTurnOnPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt FonsScalingLambda.Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt CloudWatchEventsTurnOnRule.Arn
+
+  FonsDagsterScalingTurnOffPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt FonsScalingLambda.Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt CloudWatchEventsTurnOffRule.Arn
+
   FonsDagsterScalingLambdaRole:
     Type: AWS::IAM::Role
     Properties:
