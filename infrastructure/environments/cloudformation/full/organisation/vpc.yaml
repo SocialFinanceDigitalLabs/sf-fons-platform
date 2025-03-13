@@ -64,9 +64,9 @@ Parameters:
     Default: 3306
     Description: Port to connect to the database
 
-  DataStoreBucket:
+  LAStoreBucket:
     Type: String
-    Description: Arn of the Data store s3 bucket
+    Description: Arn of the Data store s3 bucket that stores the LA data (usually in a different account)
 
   WorkspaceBucket:
     Type: String
@@ -74,11 +74,11 @@ Parameters:
 
   ExternalDataBucket:
     Type: String
-    Description: Arn of the External Data s3 bucket
+    Description: Arn of the External Data s3 bucket that contains data from external sources (e.g. ONS)
 
-  SharedBucket:
+  EgressBucket:
     Type: String
-    Description: Arn of the Shared s3 bucket
+    Description: Arn of the Shared s3 bucket that will be used to store the output data of the platform
 
 Resources:
   VPC:
@@ -300,22 +300,22 @@ Resources:
               - "s3:GetBucketLocation"
               - "s3:GetObjectVersion"
             Resource:
-              - !Ref DataStoreBucket
+              - !Ref LAStoreBucket
               - !Ref WorkspaceBucket
-              - !Ref SharedBucket
+              - !Ref EgressBucket
               - !Ref ExternalDataBucket
-              - !Sub "${DataStoreBucket}/*"
+              - !Sub "${LAStoreBucket}/*"
               - !Sub "${WorkspaceBucket}/*"
-              - !Sub "${SharedBucket}/*"
+              - !Sub "${EgressBucket}/*"
               - !Sub "${ExternalDataBucket}/*"
           - Effect: Allow
             Principal: '*'
             Action:
               - 's3:ListBucket'
             Resource:
-              - !Ref DataStoreBucket
+              - !Ref LAStoreBucket
               - !Ref WorkspaceBucket
-              - !Ref SharedBucket
+              - !Ref EgressBucket
               - !Ref ExternalDataBucket
       RouteTableIds:
         - !Ref PrivateRouteTable1
