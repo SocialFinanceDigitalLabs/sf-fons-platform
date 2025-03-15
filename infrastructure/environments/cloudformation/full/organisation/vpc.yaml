@@ -78,7 +78,7 @@ Parameters:
 
   EgressBucket:
     Type: String
-    Description: Arn of the Shared s3 bucket that will be used to store the output data of the platform
+    Description: Arn of the Egress s3 bucket that will be used to store the output data of the platform
 
 Resources:
   VPC:
