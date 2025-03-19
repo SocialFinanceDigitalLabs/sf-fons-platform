@@ -14,7 +14,7 @@ poetry run pip install --target ./package boto3
 3. Zip Everything Up
 ```commandline
 cd package
-zip -r ../ecs-scaling-lambda.zip
+zip -r ../ecs-scaling-lambda.zip .
 ```
 4. Add the lambda function handler to the zip
 ```commandline
