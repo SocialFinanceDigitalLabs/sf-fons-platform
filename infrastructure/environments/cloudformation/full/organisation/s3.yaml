@@ -81,6 +81,14 @@ Resources:
               SSEAlgorithm: AES256
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: GlacierRule
+            Status: Enabled
+            ExpirationInDays: !Ref AutoFileDeletion
+            Transitions:
+              - TransitionInDays: 1
+                StorageClass: GLACIER
 
   EgressBucket:
     Type: 'AWS::S3::Bucket'
