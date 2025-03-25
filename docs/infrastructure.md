@@ -32,8 +32,14 @@ In order to set this up, use the full directory in the cloudformation folder. Br
    4. common/general_key_access.yaml
       * Use the output from this to configure Heroku env vars.
    5. organisation/VPC.yaml
+      * This step requires the SharedBucketARN from the LA - you can construct this:
+      ```python
+      f"arn:aws:s3:::fons-shared-{org}-prod"
+      ```
    6. orgamisation/dagster.yaml
    7. common/scaling.yaml
+      * Add the lambda zip file to the appropriate bucket before creating this infrastructure. Follow
+      these [instructions](../infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/README.md)
 2. LA (taking the organisation account id as an input to allow access to the shared bucket.)
    1. common/ids.yaml
    2. la/sso1.yaml
@@ -41,8 +47,11 @@ In order to set this up, use the full directory in the cloudformation folder. Br
       whoever will be managing LA users
       * Run SSO 2 when details are returned
    3. la/s3.yaml
+      * The OrgAccountRoleArn required here is the CodeServerTaskRole from the Organisation infrastructure.
    4. common/general_key_access.yaml
       * Use the output from this to configure Heroku env vars.
    5. la/VPC.yaml
    6. la/dagster.yaml
    7. common/scaling.yaml
+     * Add the lambda zip file to the appropriate bucket before creating this infrastructure. Follow
+      these [instructions](../infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/README.md)
