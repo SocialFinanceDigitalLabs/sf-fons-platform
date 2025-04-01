@@ -109,6 +109,9 @@ Resources:
                   - !Ref DaemonServiceARN
                   - !Ref DagitServiceARN
                   - !Ref CodeServerServiceARN
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+
 
   FonsScalingLambda:
     Type: AWS::Lambda::Function
