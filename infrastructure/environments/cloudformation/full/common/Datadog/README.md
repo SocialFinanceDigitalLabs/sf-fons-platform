@@ -10,11 +10,15 @@ Please implement these in order as follows:
 
 ## Integration (Datadog managed)
 This allows datadog to integrate with the AWS account. This means
-it can look for and detect unusual activity
+it can look for and detect unusual activity. Details [here](https://docs.datadoghq.com/getting_started/integrations/)
 
 ## Log Uploader (Data dog managed)
 This is specific to allowing datadog to access logs. The lambda function will surface
-logs that it's subscribed to (see below) and send them to Datadog
+logs that it's subscribed to (see below) and send them to Datadog. The only missing piece
+to this is how it's triggered. It can be triggered via a schedule or event which are
+configured separately. See 
+[here](https://docs.datadoghq.com/logs/guide/send-aws-services-logs-with-the-datadog-lambda-function/?tab=awsconsole) 
+for more info.
 
 ## Log Uploader Scheduler (SF Managed)
 This was added by myself to trigger the log uploader on a schedule we can define. There
