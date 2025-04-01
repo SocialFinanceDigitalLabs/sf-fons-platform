@@ -4,7 +4,9 @@ We should generally use the latest version of the Integration and Log Uploader f
 panel. I've included copies here, however for eas of access. The scheduler and Subscription
 options are created by us using the 
 [data dog docs](https://docs.datadoghq.com/logs/guide/send-aws-services-logs-with-the-datadog-lambda-function/?tab=cloudformation#automatically-set-up-triggers) 
-as a guide.
+as a guide. 
+
+Please implement these in order as follows:
 
 ## Integration (Datadog managed)
 This allows datadog to integrate with the AWS account. This means
