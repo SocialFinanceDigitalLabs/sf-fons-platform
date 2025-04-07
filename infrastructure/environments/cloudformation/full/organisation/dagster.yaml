@@ -115,6 +115,9 @@ Parameters:
     Type: String
     Description: Which datasets to allow to run on the system
     Default: "ssda903,cin"
+  RegionConfig:
+    Type: String
+    Description: Name of the region to pull configuration file e.g. gmca or eoe
 
   # Database Parameters
   DBStorageSize:
@@ -649,6 +652,8 @@ Resources:
               Value: !Ref ReportsPipelineSchedule
             - Name: ALLOWED_DATASETS
               Value: !Ref AllowedDatasets
+            - Name: REGION_CONFIG
+              Value: !Ref RegionConfig
       Tags:
         - Key: Project
           Value: !Ref ProjectName
