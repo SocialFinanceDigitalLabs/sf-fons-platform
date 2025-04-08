@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "post-auth"
+version = "0.1.0"
+description = "A Lambda function that runs post-authentication to perform actions such as syncing user data"
+authors = ["Matthew Pugh <matthew.pugh@socialfinance.org.uk>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+boto3 = "^1.37.29"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.8.0"
+pytest = "^8.3.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
