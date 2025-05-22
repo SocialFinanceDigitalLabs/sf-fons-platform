@@ -29,6 +29,8 @@ In order to set this up, use the full directory in the cloudformation folder. Br
       * Send the output to the controlling organisation for their SSO setup (entity id and reply URL only)
       * Run SSO 2 when details are returned
    3. organisation/s3.yaml
+      * Upload external data to the external data S3 bucket - this can be copied from
+      staging
    4. common/general_key_access.yaml
       * Use the output from this to configure Heroku env vars.
    5. organisation/VPC.yaml
