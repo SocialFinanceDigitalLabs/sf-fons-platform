@@ -121,6 +121,10 @@ Parameters:
   ConfigSchedule:
     Type: String
     Description: Schedule that logs the config file for any allowed datasets
+  SensorMinimumInterval:
+    Type: String
+    Description: Interval (in seconds) between sensor evaluations
+    Default: 3600
 
   # Database Parameters
   DBStorageSize:
@@ -659,6 +663,8 @@ Resources:
               Value: !Ref RegionConfig
             - Name: CONFIG_SCHEDULE
               Value: !Ref ConfigSchedule
+            - Name: SENSOR_MIN_INTERVAL
+              Value: !Ref SensorMinimumInterval
       Tags:
         - Key: Project
           Value: !Ref ProjectName
