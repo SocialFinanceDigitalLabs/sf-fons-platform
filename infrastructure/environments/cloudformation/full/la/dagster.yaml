@@ -393,6 +393,7 @@ Resources:
   CodeServerTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${ProjectName}-${RegionConfig}-CodeServerTaskExecutionRole"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -406,6 +407,19 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      Policies:
+        - PolicyName: ReadRemoteSecretDockerCredentials
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: "arn:aws:secretsmanager:eu-west-2:260477567664:secret:dockerhub-sysadmin-credentials-5Lb3FI"
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: "arn:aws:kms:eu-west-2:260477567664:key/69dd8f98-e08c-4410-840f-ab1ea78ef2b2"
 
   CodeServerTaskRole:
     Type: AWS::IAM::Role
@@ -585,6 +599,8 @@ Resources:
       ContainerDefinitions:
         - Name: user_code
           Image: !Ref UserCode1ImagePath
+          RepositoryCredentials:
+            CredentialsParameter: "arn:aws:secretsmanager:eu-west-2:260477567664:secret:dockerhub-sysadmin-credentials-5Lb3FI"
           Memory: !Ref CodeServerMemory
           PortMappings:
             - ContainerPort: 4000
