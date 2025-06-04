@@ -125,6 +125,10 @@ Parameters:
     Type: String
     Description: Interval (in seconds) between sensor evaluations
     Default: 3600
+  DagsterGRPCTimeout:
+    Type: String
+    Description: The time (in seconds) the dagster daemon will wait for sensors and schedules to complete.
+    Default: 60
 
   # Database Parameters
   DBStorageSize:
@@ -544,6 +548,8 @@ Resources:
               Value: "utf8.env"
             - Name: DAGSTER_CODE_SERVER_TASK
               Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
+            - Name: DAGSTER_GRPC_TIMEOUT_SECONDS
+              Value: !GetAtt DagsterGRPCTimeout
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -603,6 +609,8 @@ Resources:
               Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
             - Name: PYTHONLEGACYWINDOWSSTDIO
               Value: "utf8.env"
+            - Name: DAGSTER_GRPC_TIMEOUT_SECONDS
+              Value: !GetAtt DagsterGRPCTimeout
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -681,6 +689,8 @@ Resources:
               Value: !Ref ConfigSchedule
             - Name: SENSOR_MIN_INTERVAL
               Value: !Ref SensorMinimumInterval
+            - Name: DAGSTER_GRPC_TIMEOUT_SECONDS
+              Value: !GetAtt DagsterGRPCTimeout
       Tags:
         - Key: Project
           Value: !Ref ProjectName
