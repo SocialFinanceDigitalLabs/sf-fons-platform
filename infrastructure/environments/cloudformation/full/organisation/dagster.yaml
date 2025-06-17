@@ -549,7 +549,7 @@ Resources:
             - Name: DAGSTER_CODE_SERVER_TASK
               Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
             - Name: DAGSTER_GRPC_TIMEOUT_SECONDS
-              Value: !GetAtt DagsterGRPCTimeout
+              Value: !Ref DagsterGRPCTimeout
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -610,7 +610,7 @@ Resources:
             - Name: PYTHONLEGACYWINDOWSSTDIO
               Value: "utf8.env"
             - Name: DAGSTER_GRPC_TIMEOUT_SECONDS
-              Value: !GetAtt DagsterGRPCTimeout
+              Value: !Ref DagsterGRPCTimeout
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -690,7 +690,7 @@ Resources:
             - Name: SENSOR_MIN_INTERVAL
               Value: !Ref SensorMinimumInterval
             - Name: DAGSTER_GRPC_TIMEOUT_SECONDS
-              Value: !GetAtt DagsterGRPCTimeout
+              Value: !Ref DagsterGRPCTimeout
       Tags:
         - Key: Project
           Value: !Ref ProjectName
