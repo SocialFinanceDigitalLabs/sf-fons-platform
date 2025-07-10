@@ -49,12 +49,17 @@ Parameters:
   LambdaCodeBucket:
     Type: String
     Description: Name of the bucket that stores the lambda code
+  TimeOnEnabled:
+    Type: String
+    Description: Whether the turn on rule is enabled. If it is not, set to DISABLED
+    Default: "ENABLED"
 
 Resources:
   CloudWatchEventsTurnOnRule:
     Type: AWS::Events::Rule
     Properties:
       Name: DagsterTurnOnRule
+      State: !Ref TimeOnEnabled
       ScheduleExpression: !Sub "cron(0 ${TimeOn} ? * MON-FRI *)"
       Targets:
         - Id: 'ScalingLambda'
