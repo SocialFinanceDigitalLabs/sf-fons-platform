@@ -35,11 +35,22 @@ Parameters:
     Default: true
     Description: Enable cross-account access to the shared S3 bucket
 
+  DataSyncRole:
+    Type: String
+    Default: ""
+    Description: The ARN of the DataSync role that will be used to access the egress S3 bucket for data transfer.
+
+
 Conditions:
   EnableCrossAccountAccessCondition:
     Fn::Equals:
       - Ref: EnableCrossAccountAccess
       - true
+  EnableEgressBucketDataSync:
+    Fn::Not:
+      - Fn::Equals:
+          - Ref: DataSyncRole
+          - ""
 
 Resources:
   ExternalDataStoreBucket:
@@ -191,6 +202,27 @@ Resources:
                 - ec2.amazonaws.com
             Action: "s3:GetObject"
             Resource: !Join [ "", [ "arn:aws:s3:::", !Ref EgressBucket, "/*" ] ]
+          - Fn::If:
+            - EnableEgressBucketDataSync
+            - Effect: Allow
+              Sid: AllowDataSyncAcrossAccounts
+              Principal:
+                AWS:
+                  - !Ref DataSyncRole
+              Action:
+                - "s3:GetBucketLocation"
+                - "s3:ListBucket"
+                - "s3:ListBucketMultipartUploads"
+                - "s3:GetObject"
+                - "s3:ListMultipartUploadParts"
+                - "s3:GetObjectTagging"
+              Resource:
+                - !GetAtt EgressBucket.Arn
+                - !Join
+                  - ''
+                  - - !GetAtt EgressBucket.Arn
+                    - "/*"
+            - !Ref AWS::NoValue
 
   ExternalDataStoreStorageRole:
     Type: 'AWS::IAM::Role'
