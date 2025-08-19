@@ -48,6 +48,8 @@ In order to set this up, use the full directory in the cloudformation folder. Br
    3. organisation/s3.yaml
       * Upload external data to the external data S3 bucket - this can be copied from
       staging
+      * If you want to enable DataSync which will copy all files from the egress bucket to a destination bucket,
+      include the ARN of the data sync role in the parameters.
    4. common/general_key_access.yaml
       * Use the output from this to configure Heroku env vars.
    5. organisation/VPC.yaml
