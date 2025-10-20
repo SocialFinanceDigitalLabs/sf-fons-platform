@@ -322,6 +322,41 @@ Resources:
               - !Sub "${SharedBucket.Arn}/*"
               - !GetAtt SharedBucket.Arn
 
+  ExternalDataStoreBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-external-data-store-${OrganisationName}-${Environment}"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  ExternalDataStoreStorageRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub "${AppName}-external-data-store-access-role-${OrganisationName}-${Environment}"
+      Description: "Role that allows a user to access the external data store S3 Bucket"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub "${AppName}-external-data-store-access-policy-${OrganisationName}-${Environment}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:DeleteObject"
+                Resource: !Sub "${ExternalDataStoreBucket.Arn}/*"
 
   IngressStorageRole:
     Type: 'AWS::IAM::Role'
@@ -446,3 +481,12 @@ Outputs:
   LambdaCodeBucket:
     Value: !Ref LambdaCodeBucket
     Description: Name of the Code Bucket to store lambda functions
+  ExternalDataStoreBucketName:
+    Value: !Ref ExternalDataStoreBucket
+    Description: Name of the external data Amazon S3 bucket with a lifecycle configuration.
+  ExternalDataStoreBucketArn:
+    Value: !GetAtt ExternalDataStoreBucket.Arn
+    Description: ARN of the external data store Amazon S3 bucket with a lifecycle configuration
+  ExternalDataStoreRoleARN:
+    Value: !GetAtt ExternalDataStoreStorageRole.Arn
+    Description: ARN of the role used to access the data store bucket
