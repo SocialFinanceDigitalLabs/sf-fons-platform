@@ -76,6 +76,9 @@ In order to set this up, use the full directory in the cloudformation folder. Br
    7. common/scaling.yaml
      * Add the lambda zip file to the appropriate bucket before creating this infrastructure. Follow
       these [instructions](../infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/README.md)
+   8. la/trigger_dagster_job.yaml
+     * Add the lambda zip file to the appropriate bucket before creating this infrastructure. Follow
+     these [instructions](../infrastructure/environments/cloudformation/full/la/lambda/trigger_dagster_job/README.md)
 
 ## Transfer to Azure Blob Storage
 If a transfer from the Organisation egress S3 bucket to Azure blob storage is required,

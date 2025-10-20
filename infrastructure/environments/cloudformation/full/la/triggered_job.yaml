@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda to trigger One-off Dagster Job through ECS
+
+
+Parameters:
+  DagitServiceName:
+    Type: String
+    Description: Name for the Dagit Service
+  DagitServiceARN:
+    Type: String
+    Description: ARN for the Dagit Service
+  ECSClusterName:
+    Type: String
+    Description: Name for the ECS Dagster Service
+  OrganisationName:
+    Type: String
+    Description: Name of the organisation running this service
+  ProjectName:
+    Type: String
+    Description: Name of the application
+    Default: fons
+  LambdaCodeBucket:
+    Type: String
+    Description: Name of the bucket that stores the lambda code
+  SubnetIds:
+    Type: CommaDelimitedList
+    Description: The Subnet IDs for the Lambda Function
+  SecurityGroupIds:
+    Type: CommaDelimitedList
+    Description: The Security Group IDs for the Lambda Function
+  PrivateServiceDiscoveryNamespace:
+    Type: String
+    Description: Namespace for private network.
+    Default: my-namespace.local
+
+Resources:
+  TriggerDagsterJobLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: TriggerDagsterJobPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                Resource:
+                  - !Ref DagitServiceARN
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+
+  TriggerDagsterJobLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: trigger-dagster-job.zip
+      Role: !GetAtt TriggerDagsterJobLambdaRole.Arn
+      Handler: handler.lambda_handler
+      Runtime: python3.13
+      Timeout: 180
+      VpcConfig:
+        SubnetIds: !Ref SubnetIds
+        SecurityGroupIds: !Ref SecurityGroupIds
+      Environment:
+        Variables:
+          ECS_CLUSTER_NAME: !Ref ECSClusterName
+          ECS_DAGIT_SERVICE_NAME: !Ref DagitServiceName
+          PRIVATE_NAMESPACE: !Ref PrivateServiceDiscoveryNamespace
+
+  TriggerDagsterStateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: TriggerDagsterStateMachinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt TriggerDagsterJobLambda.Arn
+
+  TriggerDagsterStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${ProjectName}-${OrganisationName}-TriggerDagsterStateMachine'
+      RoleArn: !GetAtt TriggerDagsterStateMachineRole.Arn
+      DefinitionString:
+        Fn::Sub: |
+          {
+            "Comment": "Trigger a Dagster job via Lambda",
+            "StartAt": "InvokeDagsterLambda",
+            "States": {
+              "InvokeDagsterLambda": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::lambda:invoke",
+                "OutputPath": "$.Payload",
+                "Parameters": {
+                  "FunctionName": "${TriggerDagsterJobLambda.Arn}",
+                  "Payload.$": "$"
+                },
+                "End": true
+              }
+            }
+          }
