@@ -76,6 +76,10 @@ Parameters:
     Type: String
     Description: Arn of the Shared s3 bucket
 
+  ExternalDataBucket:
+    Type: String
+    Description: Arn of the External Data s3 bucket that contains data from external sources (e.g. ONS)
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -299,9 +303,11 @@ Resources:
               - !Ref DataStoreBucket
               - !Ref WorkspaceBucket
               - !Ref SharedBucket
+              - !Ref ExternalDataBucket
               - !Sub "${DataStoreBucket}/*"
               - !Sub "${WorkspaceBucket}/*"
               - !Sub "${SharedBucket}/*"
+              - !Sub "${ExternalDataBucket}/*"
           - Effect: Allow
             Principal: '*'
             Action:
@@ -310,6 +316,7 @@ Resources:
               - !Ref DataStoreBucket
               - !Ref WorkspaceBucket
               - !Ref SharedBucket
+              - !Ref ExternalDataBucket
       RouteTableIds:
         - !Ref PrivateRouteTable1
         - !Ref PrivateRouteTable2

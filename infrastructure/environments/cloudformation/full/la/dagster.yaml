@@ -99,8 +99,7 @@ Parameters:
     Description: The location to surface files for the org account
   ExternalDataLocation:
     Type: String
-    Description: Location of external data to be used for the pipeline (shouldn't be used in the LA instance)
-    Default: ""
+    Description: Location of external data to be used for the pipeline
   CleanPipelineSchedule:
     Type: String
     Description: The CRON string used to determine how often the clean file pipeline should run
@@ -648,6 +647,8 @@ Resources:
               Value: !Ref InputLocation
             - Name: SHARED_LOCATION
               Value: !Ref OutputLocation
+            - Name: EXTERNAL_DATA_LOCATION
+              Value: !Ref ExternalDataLocation
             - Name: CLEAN_SCHEDULE
               Value: !Ref CleanPipelineSchedule
             - Name: REPORTS_SCHEDULE
