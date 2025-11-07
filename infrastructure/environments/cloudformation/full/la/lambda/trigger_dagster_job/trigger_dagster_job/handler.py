@@ -49,37 +49,45 @@ def wait_for_dagster_health():
 
 
 def lambda_handler(event, context):
-    run_config = {
-        "ops": {
-            "create_session_folder": {
-                "config": {
-                    "dataset_folder": "s3://fons-data-store-la-staging/TestLA1-4346b-TT1/annex_a/",
-                    "la_folder": "s3://fons-data-store-la-staging/TestLA1-4346b-TT1/",
-                    "input_la_code": "TT1",
-                    "dataset": "annex_a",
+    mutation = """
+        mutation LaunchRunMutation(
+            $jobName: String!
+            $dataset: String!
+        ){
+            launchRun(
+                executionParams: {
+                    selector: {
+                        repositoryLocationName: "user_code"
+                        repositoryName: "sync"
+                        jobName: $jobName
+                    }
+                    runConfigData: {}
+                    executionMetadata: {
+                        tags: [{ key: "dataset", value: $dataset}]
+                    }
                 }
-            },
-            "open_current": {
-                "config": {
-                    "dataset_folder": "s3://fons-data-store-la-staging/TestLA1-4346b-TT1/annex_a/",
-                    "la_folder": "s3://fons-data-store-la-staging/TestLA1-4346b-TT1/",
-                    "input_la_code": "TT1",
-                    "dataset": "annex_a",
+            ) {
+                __typename
+                ... on LaunchRunSuccess {
+                    run {
+                        runId
+                    }
                 }
-            },
-            "process_files": {
-                "config": {
-                    "dataset_folder": "s3://fons-data-store-la-staging/TestLA1-4346b-TT1/annex_a/",
-                    "la_folder": "s3://fons-data-store-la-staging/TestLA1-4346b-TT1/",
-                    "input_la_code": "TT1",
-                    "dataset": "annex_a",
+                ... on RunConfigValidationInvalid {
+                    errors {
+                        message
+                        reason
+                    }
                 }
-            },
-        }
-    }
+                ... on PythonError {
+                    message
+                }
+            }
+        }"""
 
-    #  """Launch a Dagster job by spinning up a webserver/Dagit ECS Service, triggering via GraphQL, and tearing it down."""
-    job_name = event["job_name"]
+    # Launch a Dagster job by spinning up a webserver/Dagit ECS Service, triggering via GraphQL, and tearing it down.
+    job_name = "start_clean_dataset"
+    dataset = event["dataset"]
 
     try:
         scale_service(1)
@@ -87,46 +95,8 @@ def lambda_handler(event, context):
 
         graphql_url = f"{DAGSTER_WEBSERVER_URL}graphql"
         mutation = {
-            "query": """
-            mutation LaunchRunMutation(
-                $repositoryLocationName: String!
-                $repositoryName: String!
-                $jobName: String!
-                $runConfigData: RunConfigData!
-                ) {
-                launchRun(
-                    executionParams: {
-                    selector: {
-                        repositoryLocationName: $repositoryLocationName
-                        repositoryName: $repositoryName
-                        jobName: $jobName
-                    }
-                    runConfigData: $runConfigData
-                    }
-                ) {
-                    __typename
-                    ... on LaunchRunSuccess {
-                    run {
-                        runId
-                    }
-                    }
-                    ... on RunConfigValidationInvalid {
-                    errors {
-                        message
-                        reason
-                    }
-                    }
-                    ... on PythonError {
-                    message
-                    }
-                }
-            }""",
-            "variables": {
-                "repositoryLocationName": "user_code",
-                "repositoryName": "sync",
-                "jobName": job_name,
-                "runConfigData": run_config,
-            },
+            "query": mutation,
+            "variables": {"jobName": job_name, "dataset": dataset},
         }
         response = requests.post(
             graphql_url, json=mutation, timeout=WEBSERVER_REQUEST_TIMEOUT
