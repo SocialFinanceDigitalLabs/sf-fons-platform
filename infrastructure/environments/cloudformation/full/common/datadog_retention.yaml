@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  |
+  This template creates an S3 bucket for long-term retention of Datadog logs.
+
+Parameters:
+  Environment:
+    Type: String
+    Description: The name for the environment (e.g. dev, staging, prod). LOWER CASE, NO SPACES
+
+  AppName:
+    Type: String
+    Default: fons
+    Description: The name for the application or instance.  LOWER CASE, NO SPACES
+
+  OrganisationName:
+    Type: String
+    Description: The name for the organisation this is for (to make sure naming is unique). LOWER CASE, NO SPACES
+
+  AutoFileDeletion:
+    Type: String
+    Default: 2190
+    Description: How long before files are automatically deleted (default 6 years)
+
+  DatadogRoleName:
+    Type: String
+    Description: The name of the Datadog role that will have access to this bucket
+
+
+Resources:
+  DatadogRetentionBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub "${AppName}-datadog-logs-${OrganisationName}-${Environment}"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: GlacierInstantRetrievalRule
+            Status: Enabled
+            ExpirationInDays: !Ref AutoFileDeletion
+            Transitions:
+              - TransitionInDays: 15
+                StorageClass: GLACIER_IR
+
+  DatadogRetentionBucketPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:ListBucket'
+            Effect: Allow
+            Resource: !GetAtt DatadogRetentionBucket.Arn
+          - Action:
+              - 's3:PutObject'
+              - 's3:GetObject'
+            Effect: Allow
+            Resource:
+              - !Join
+                - ''
+                - - !GetAtt DatadogRetentionBucket.Arn
+                  - "/*"
+      PolicyName: DatadogRetentionBucketPolicy
+      Roles:
+        - !Ref DatadogRoleName
+
+Outputs:
+  DatadogRetentionBucketName:
+    Value: !Ref DatadogRetentionBucket
+    Description: Name of the bucket for Datadog long-term retention.

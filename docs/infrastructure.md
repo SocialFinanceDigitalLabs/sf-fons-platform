@@ -61,6 +61,10 @@ In order to set this up, use the full directory in the cloudformation folder. Br
    7. common/scaling.yaml
       * Add the lambda zip file to the appropriate bucket before creating this infrastructure. Follow
       these [instructions](../infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/README.md)
+   8. common/datadog_retention.yaml
+      * Optional - only if using Datadog for monitoring. A prerequisite is creating a Datadog integration for this
+      AWS account following [these instructions](https://docs.datadoghq.com/getting_started/integrations/aws/). 
+      Then use the role name created in the Datadog integration stack when applying this stack.
 2. LA (taking the organisation account id as an input to allow access to the shared bucket.)
    1. common/ids.yaml
    2. la/sso1.yaml
@@ -76,3 +80,5 @@ In order to set this up, use the full directory in the cloudformation folder. Br
    7. common/scaling.yaml
      * Add the lambda zip file to the appropriate bucket before creating this infrastructure. Follow
       these [instructions](../infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/README.md)
+   8. common/datadog_retention.yaml
+     * Optional - only if using Datadog for monitoring. Use the role name created in the Datadog integration stack.
