@@ -80,6 +80,15 @@ Parameters:
     Type: String
     Description: Arn of the Egress s3 bucket that will be used to store the output data of the platform
 
+  ExportToAzure:
+    Type: String
+    AllowedValues: [ "true", "false" ]
+    Default: "false"
+    Description: Whether to export final data to Azure. If set to "true", required resources will be created in this stack
+
+Conditions:
+  ExportToAzureCondition: !Equals [ !Ref ExportToAzure, "true" ]
+
 Resources:
   VPC:
     Type: AWS::EC2::VPC
@@ -350,6 +359,20 @@ Resources:
         - !Ref CodeServerSecurityGroup
       PrivateDnsEnabled: true
 
+  SecretsManagerEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: ExportToAzureCondition
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.secretsmanager"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref SecretsManagerEndpointSecurityGroup
+
   PrivateServiceDiscoveryNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
@@ -429,6 +452,36 @@ Resources:
         - CidrIp: 0.0.0.0/0
           IpProtocol: -1
 
+  SecretsManagerEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: ExportToAzureCondition
+    DependsOn: VPC
+    Properties:
+      GroupName: !Sub "secrets-manager-endpoint-sg-${Environment}"
+      GroupDescription: !Sub "Security group for Secrets Manager VPC endpoint in ${Environment}"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ExportSecurityGroup
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
+
+  ExportSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: ExportToAzureCondition
+    DependsOn: VPC
+    Properties:
+      GroupDescription: "Security group for an ECS task to transfer S3 files to Azure"
+      GroupName: !Sub "exporttask-sg-${Environment}"
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -495,6 +548,11 @@ Outputs:
   DatabaseSecurityGroup:
     Description: Security Group for the database
     Value: !Ref DatabaseSecurityGroup
+
+  ExportSecurityGroup:
+    Description: Security group for the export task
+    Condition: ExportToAzureCondition
+    Value: !Ref ExportSecurityGroup
 
   DatabaseSubnetGroup:
     Description: Subnet Group for the database
