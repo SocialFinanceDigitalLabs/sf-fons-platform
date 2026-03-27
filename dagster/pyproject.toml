@@ -7,15 +7,15 @@ readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = ">=3.12,<3.13"
+python = "~3.13"
 dagster = "^1.12.18"
 dagster-docker = "^0.28.18"
 dagster-postgres = "^0.28.18"
-dagit = "^1.12.21"
 pytest = "^7.3.1"
 pandas = "^2.2.1"
 dagster-graphql = "^1.12.21"
-dagster-aws = "^0.28.21"
+dagster-aws = "^0.28.22"
+dagster-webserver = "^1.12.22"
 fs = "^2.4.16"
 bandit = "^1.9.4"
 

@@ -1,5 +1,4 @@
 from dagster import op
-from sfdata_stream_parser.parser import openpyxl
 from dagster import op
 
 @op
