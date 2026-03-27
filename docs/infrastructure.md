@@ -76,3 +76,20 @@ In order to set this up, use the full directory in the cloudformation folder. Br
    7. common/scaling.yaml
      * Add the lambda zip file to the appropriate bucket before creating this infrastructure. Follow
       these [instructions](../infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/README.md)
+
+## Transfer to Azure Blob Storage
+If a transfer from the Organisation egress S3 bucket to Azure blob storage is required,
+set ExportToAzure in the [`vpc` stack](../infrastructure/environments/cloudformation/full/organisation/vpc.yaml)
+to `true`. Then create a separate stack for the storage transfer using `organisation/storage_transfer.yaml`.
+
+From Azure blob storage you will need the container name and a SAS token with these parameters:
+- Allowed services: Blob
+- Allowed resource types: Object, Container
+- Allowed permissions: Write, Create, Read, List
+- Allowed protocols: HTTPS only
+
+It is recommended that the Azure storage container limit public access by IP - this should be limited
+to the two IP addresses of the private subnet NAT gateways on the organisation VPC stack 
+so the transfer task can connect.
+
+The export task image source code can be found in [this repo](https://github.com/SocialFinanceDigitalLabs/sf-fons-export-data/tree/main).
