@@ -18,21 +18,21 @@ mkdir package
 poetry run ruff check trigger_dagster_job/handler.py --fix
 poetry run black trigger_dagster_job/handler.py
 ```
-2. Next, we want to ensure all the libraries are present in the package:
+3. Next, we want to ensure all the libraries are present in the package:
 ```commandline
 poetry run pip install --target ./package boto3 requests
 ```
-3. Zip Everything Up
+4. Zip Everything Up
 ```commandline
 cd package
 zip -r ../trigger-dagster-job.zip .
 ```
-4. Add the lambda function handler to the zip
+5. Add the lambda function handler to the zip
 ```commandline
 cd ../trigger_dagster_job
 zip ../trigger-dagster-job.zip ./handler.py
 ```
-5. The zip should have a flat directory structure, ready to be uploaded to s3
+6. The zip should have a flat directory structure, ready to be uploaded to s3
 
 ## Automated Process
 To do. The above process could be done via a github actions and then an upload step could push this to s3,

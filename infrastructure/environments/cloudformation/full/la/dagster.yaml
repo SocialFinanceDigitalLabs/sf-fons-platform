@@ -203,7 +203,7 @@ Parameters:
     Default: my-namespace.local
   DagsterWebserverDiscoveryServiceArn:
     Type: String
-    Description: ID for the Dagster Webserver Service Discovery Service
+    Description: ARN for the Dagster Webserver Service Discovery Service
 
 Conditions:
   IsProd: !Equals [!Ref Environment, "prod"]

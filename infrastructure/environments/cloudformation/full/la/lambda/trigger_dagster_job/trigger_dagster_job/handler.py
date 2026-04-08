@@ -101,16 +101,18 @@ def lambda_handler(event, context):
         response = requests.post(
             graphql_url, json=mutation, timeout=WEBSERVER_REQUEST_TIMEOUT
         )
-        logger.info(f"Successfully started {job_name} job.")
+        logger.info(f"Response for {job_name} job: {response.status_code}")
+
+        response_payload = reponse.json()
 
         return {
-            "statusCode": 200,
-            "body": json.loads(json.dumps(response, default=str)),
+            "statusCode": response.status_code,
+            "body": response_payload,
         }
 
     except Exception as e:
         logger.error(f"Error: {e}")
-        raise e
+        raise
 
     finally:
         # Always scale back down
