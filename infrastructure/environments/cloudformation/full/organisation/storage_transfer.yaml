@@ -1,0 +1,258 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Scheduled S3 to Azure Blob transfer using AzCopy on ECS Fargate.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: fons
+    Description: The name for the application or instance
+
+  OrganisationName:
+    Type: String
+    Description: The name for the organisation
+
+  Environment:
+    Type: String
+    Description: The name for the environment (e.g. dev, staging, prod)
+
+  S3BucketName:
+    Type: String
+    Description: Name of the source S3 bucket
+
+  S3BucketARN:
+    Type: String
+    Description: ARN of the source S3 bucket
+
+  AzureSasUrl:
+    Type: String
+    NoEcho: true
+    Description: >
+      Full Azure Blob SAS URL with write permissions for the destination container.
+      Format: https://<account>.blob.core.windows.net/<container>?<sas-token>
+
+  AzureContainerName:
+    Type: String
+    Description: Name of the destination Azure Blob container
+
+  ExportSecurityGroup:
+    Type: String
+    Description: Security group ID for the Fargate task (must allow outbound HTTPS)
+
+  PrivateSubnets:
+    Type: CommaDelimitedList
+    Description: Comma delimited list of private subnets associated with the security group
+
+  DockerImageUri:
+    Type: String
+    Description: Docker Hub image URI including tag for azcopy (e.g. youruser/azcopy-transfer:1.0.0)
+
+  ScheduleExpression:
+    Type: String
+    Default: "cron(0 2 * * ? *)"
+    Description: The cron to determine when the transfer task runs
+
+  TaskCpu:
+    Type: String
+    Default: "1024"
+    Description: Fargate task CPU units (1024 = 1 vCPU)
+
+  TaskMemory:
+    Type: String
+    Default: "2048"
+    Description: Fargate task memory in MB
+
+  S3FilesToCopy:
+    Type: String
+    Default: ""
+    Description: A comma-separated list of specific S3 object keys to copy
+
+Resources:
+  AzureCredentialsSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${AWS::StackName}/azure-sas-url"
+      Description: Azure SAS URL for the destination Blob container
+      SecretString: !Ref AzureSasUrl
+      Tags:
+        - Key: StackName
+          Value: !Ref AWS::StackName
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-cluster"
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  CloudWatchLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${ProjectName}-${OrganisationName}-export-azure-${Environment}"
+      RetentionInDays: 90
+
+  # Task Execution Role — used by ECS agent to pull image from Docker Hub and write logs
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-task-execution-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: PullSecretForInjection
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref AzureCredentialsSecret
+                  - "arn:aws:secretsmanager:eu-west-2:260477567664:secret:dockerhub-sysadmin-credentials-5Lb3FI"
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: "arn:aws:kms:eu-west-2:260477567664:key/69dd8f98-e08c-4410-840f-ab1ea78ef2b2"
+
+  # Task Role — assumed by the running container itself
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-task-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3ReadAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource:
+                  - !Ref S3BucketARN
+                  - !Sub "${S3BucketARN}/*"
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref AzureCredentialsSecret
+
+  TransferTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${AWS::StackName}-azcopy-transfer"
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: azcopy-transfer
+          Image: !Ref DockerImageUri
+          RepositoryCredentials:
+            CredentialsParameter: "arn:aws:secretsmanager:eu-west-2:260477567664:secret:dockerhub-sysadmin-credentials-5Lb3FI"
+          Environment:
+            - Name: S3_BUCKET_NAME
+              Value: !Ref S3BucketName
+            - Name: S3_FILES
+              Value: !Ref S3FilesToCopy
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: AZURE_CONTAINER_NAME
+              Value: !Ref AzureContainerName
+          Secrets:
+            - Name: AZURE_SAS_URL
+              ValueFrom: !Ref AzureCredentialsSecret
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: transfer
+          ReadonlyRootFilesystem: false
+          Privileged: false
+
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-scheduler-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: RunEcsTask
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:RunTask
+                Resource: !Ref TransferTaskDefinition
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt TaskExecutionRole.Arn
+                  - !GetAtt TaskRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: ecs-tasks.amazonaws.com
+
+  TransferSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "${AWS::StackName}-transfer-schedule"
+      Description: Triggers the S3 to Azure Blob AzCopy transfer task
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: "Europe/London"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      State: ENABLED
+      Target:
+        Arn: !GetAtt EcsCluster.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        EcsParameters:
+          TaskDefinitionArn: !Ref TransferTaskDefinition
+          TaskCount: 1
+          LaunchType: FARGATE
+          NetworkConfiguration:
+            AwsvpcConfiguration:
+              Subnets: !Ref PrivateSubnets
+              SecurityGroups:
+                - !Ref ExportSecurityGroup
+              AssignPublicIp: DISABLED
+          PlatformVersion: LATEST
+        RetryPolicy:
+          MaximumRetryAttempts: 2
+          MaximumEventAgeInSeconds: 3600
