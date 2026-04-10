@@ -465,6 +465,10 @@ Resources:
           FromPort: 443
           ToPort: 443
           SourceSecurityGroupId: !Ref ExportSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref CodeServerSecurityGroup
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: -1
