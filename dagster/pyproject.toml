@@ -1,27 +1,23 @@
 [tool.poetry]
 name = "sfdata-platform"
-version = "0.1.0"
+version = "0.2.0"
 description = ""
-authors = ["Matthew Pugh <matthew.pugh@socialfinance.org.uk>"]
+authors = ["Matthew Pugh <matthew.pugh@socialfinance.org.uk>", "Christina Moore <christina.moore@socialfinance.org.uk>"]
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.10"
-dagster = "^1.3.6"
-dagit = "^1.3.6"
+python = "~3.13"
+dagster = "^1.12.18"
+dagster-docker = "^0.28.18"
+dagster-postgres = "^0.28.18"
 pytest = "^7.3.1"
-dagster-postgres = "^0.19.6"
-dagster-docker = "^0.19.6"
-pyodbc = "^4.0.39"
-pandas = "^1.4.2"
-postgres = "^4.0"
-dagster-graphql = "^1.3.7"
-dagster-aws = "^0.19.7"
-python-decouple = "^3.8"
+pandas = "^2.2.1"
+dagster-graphql = "^1.12.21"
+dagster-aws = "^0.28.22"
+dagster-webserver = "^1.12.22"
 fs = "^2.4.16"
-liiatools = "^0.1.5.3"
-sfdata-stream-parser = "^0.4.1"
-bandit = "^1.7.7"
+bandit = "^1.9.4"
 
 
 [build-system]
