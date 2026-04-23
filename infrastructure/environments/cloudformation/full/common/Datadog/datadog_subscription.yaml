@@ -1,0 +1,47 @@
+Parameters:
+  DatadogForwarderARN:
+    Description: "ARN of the Datadog log uploader lambda (returned by cloudformation stack defined separately)"
+    Type: String
+    Default: ""
+  CodeServerCloudwatchLogGroupName:
+    Description: "Log group name of the code server service/task"
+    Type: String
+    Default: ""
+  DagsterDaemonCloudwatchLogGroupName:
+    Description: "Log group name of the dagster daemon service/task"
+    Type: String
+    Default: ""
+  DagsterWebserverCloudwatchLogGroupName:
+    Description: "Log group name of the dagster webserver service/task"
+    Type: String
+    Default: ""
+  ScalingLambdaCloudwatchLogGroupName:
+    Description: "Log group name of the scaling lambda function"
+    Type: String
+    Default: ""
+
+Resources:
+  CodeServerSubscriptionFilter:
+    Type: "AWS::Logs::SubscriptionFilter"
+    Properties:
+      DestinationArn: !Ref DatadogForwarderARN
+      LogGroupName: !Ref CodeServerCloudwatchLogGroupName
+      FilterPattern: ""
+  DagsterDaemonSubscriptionFilter:
+    Type: "AWS::Logs::SubscriptionFilter"
+    Properties:
+      DestinationArn: !Ref DatadogForwarderARN
+      LogGroupName: !Ref DagsterDaemonCloudwatchLogGroupName
+      FilterPattern: ""
+  DagsterWebserverSubscriptionFilter:
+    Type: "AWS::Logs::SubscriptionFilter"
+    Properties:
+      DestinationArn: !Ref DatadogForwarderARN
+      LogGroupName: !Ref DagsterWebserverCloudwatchLogGroupName
+      FilterPattern: ""
+  ECSScalingLambdaSubscriptionFilter:
+    Type: "AWS::Logs::SubscriptionFilter"
+    Properties:
+      DestinationArn: !Ref DatadogForwarderARN
+      LogGroupName: !Ref ScalingLambdaCloudwatchLogGroupName
+      FilterPattern: ""

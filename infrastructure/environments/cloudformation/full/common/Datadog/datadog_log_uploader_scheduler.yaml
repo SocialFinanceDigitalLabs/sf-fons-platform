@@ -1,0 +1,27 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  TimeRun:
+    Type: String
+    Description: Time(Hour) to upload logs (e.g., 23 for 11pm)
+    Default: 9,13
+  LogUploaderArn:
+    Type: String
+    Description: ARN of the Log Uploader ARN
+
+Resources:
+  LogUploaderTriggerRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: LogUploaderTurnOnRule
+      ScheduleExpression: !Sub "cron(0 ${TimeRun} ? * MON-FRI *)"
+      Targets:
+        - Id: 'LogUploader'
+          Arn: !Ref LogUploaderArn
+
+  LogUploaderPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LogUploaderArn
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt LogUploaderTriggerRule.Arn
