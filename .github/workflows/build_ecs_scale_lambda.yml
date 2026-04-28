@@ -1,0 +1,53 @@
+name: Package Scaling Lambda
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+
+      - uses: actions/cache@v3
+        name: Define a cache for the virtual environment based on the dependencies lock file
+        with:
+          path: ./.venv
+          key: venv-${{ hashFiles('./infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/poetry.lock') }}
+
+      - name: Install the project dependencies
+        working-directory: ./infrastructure/environments/cloudformation/full/common/lambda/ecs_scale
+        run: poetry install --no-root
+
+      - name: Install dependencies into package dir
+        run: |
+          poetry export -f requirements.txt --output requirements.txt --without-hashes
+          pip install -r requirements.txt --target ./package
+
+      - name: Zip dependencies
+        run: zip -r ./ecs-scaling-lambda.zip ./package
+
+      - name: Add handler to zip
+        run: |
+          zip ./ecs-scaling-lambda.zip ./infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/ecs_scale/handler.py
+
+      - name: Upload artifact for deploy jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-zip
+          path: ./ecs-scaling-lambda.zip
+          retention-days: 1
