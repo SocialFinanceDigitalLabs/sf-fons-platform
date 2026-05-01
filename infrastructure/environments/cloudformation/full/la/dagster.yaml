@@ -201,6 +201,9 @@ Parameters:
     Type: String
     Description: Namespace for private network.
     Default: my-namespace.local
+  DagsterWebserverDiscoveryServiceArn:
+    Type: String
+    Description: ARN for the Dagster Webserver Service Discovery Service
 
 Conditions:
   IsProd: !Equals [!Ref Environment, "prod"]
@@ -557,6 +560,7 @@ Resources:
           PortMappings:
             - ContainerPort: 3000
               Protocol: tcp
+              Name: 3000
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -698,17 +702,19 @@ Resources:
     DependsOn: [ DagsterCluster, DagitTaskDefinition ]
     Properties:
       Cluster: !Ref DagsterCluster
-      DesiredCount: !If [IsProd, 0, 1]
+      DesiredCount: 0
       LaunchType: !Ref DagitLaunchType
       TaskDefinition: !Ref DagitTaskDefinition
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
           Subnets:
-           - !Ref PublicSubnet1
-           - !Ref PublicSubnet2
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
           SecurityGroups:
            - !Ref DagitSecurityGroup
+      ServiceRegistries:
+        - RegistryArn: !Ref DagsterWebserverDiscoveryServiceArn
+          ContainerName: dagster-webserver
       ServiceConnectConfiguration:
         Enabled: true
         Namespace: !Ref PrivateServiceDiscoveryNamespace
