@@ -239,28 +239,9 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      Policies:
-        - PolicyName: DagitTaskExecutionSSM
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "ssm:GetParameters"
-                  - "secretsmanager:GetSecretValue"
-                Resource:
-                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task/*/*"
-                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/CodeServerTask:*"
-              - Effect: Allow
-                Action:
-                  - "ecs:DescribeTaskDefinition"
-                Resource:
-                  - "*"
-      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
+      ManagedPolicyArns: # These need to be pared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
-        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
-        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
 
   DagitTaskRole:
     Type: AWS::IAM::Role
@@ -313,11 +294,8 @@ Resources:
                   - "ecs:DescribeTaskDefinition"
                 Resource:
                   - "*"
-      ManagedPolicyArns:        # These need to be peared down for security reasons. What is necessary?
+      ManagedPolicyArns:        # These need to be pared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
-        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
-        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
-        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   DaemonTaskExecutionRole:
@@ -330,12 +308,9 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
+      ManagedPolicyArns: # These need to be pared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
-        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
-        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
-        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
 
   DaemonTaskRole:
     Type: AWS::IAM::Role
@@ -389,11 +364,8 @@ Resources:
                 Condition:
                   StringLike:
                     iam:PassedToService: "ecs-tasks.amazonaws.com"
-      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
+      ManagedPolicyArns: # These need to be pared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
-        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
-        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
-        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   CodeServerTaskExecutionRole:
@@ -407,12 +379,9 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
+      ManagedPolicyArns: # These need to be pared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
-        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
-        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
-        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
       Policies:
         - PolicyName: ReadRemoteSecretDockerCredentials
           PolicyDocument:
@@ -477,11 +446,8 @@ Resources:
                   - !Ref InputLocationArn
                   - !Sub "${InputLocationArn}/*"
 
-      ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
+      ManagedPolicyArns: # These need to be pared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
-        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
-        - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
-        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   DagsterCluster:
