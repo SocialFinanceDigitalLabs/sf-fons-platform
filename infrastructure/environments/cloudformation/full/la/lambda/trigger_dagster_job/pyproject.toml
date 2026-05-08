@@ -1,0 +1,22 @@
+[project]
+name = "trigger-dagster-job"
+version = "0.1.0"
+description = "A lambda to trigger a Dagster job"
+authors = [
+    {name = "christina.moore",email = "christina.moore@socialfinance.org.uk"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "boto3 (>=1.40.54,<2.0.0)",
+    "requests (>=2.32.5,<3.0.0)",
+    "black (>=25.9.0,<26.0.0)",
+    "ruff (>=0.14.1,<0.15.0)"
+]
+
+[tool.poetry.dependencies]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

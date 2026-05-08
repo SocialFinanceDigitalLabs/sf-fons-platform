@@ -9,11 +9,6 @@ Parameters:
     Description: An environment name that is prefixed to resource names. Valid values are dev, staging, prod
     Type: String
 
-  DagitSGCIDR:
-    Description: CIDR block for Dagit's security group. All zeros mean can be accessed by anyone.
-    Type: String
-    Default: 0.0.0.0/0
-
   VpcCIDR:
     Description: Please enter the IP range (CIDR notation) for this VPC
     Type: String
@@ -356,6 +351,19 @@ Resources:
       Name: my-namespace.local
       Vpc: !Ref VPC
 
+  DagsterWebserverDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: dagster-webserver
+      NamespaceId: !Ref PrivateServiceDiscoveryNamespace
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+        RoutingPolicy: WEIGHTED
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
   DaemonSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     DependsOn: VPC
@@ -387,6 +395,17 @@ Resources:
         - CidrIp: 0.0.0.0/0
           IpProtocol: -1
 
+  DagsterTriggerOneOffSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: VPC
+    Properties:
+      GroupName: !Sub "dagsteroneoff-sg-${Environment}"
+      GroupDescription: "Security Group for the Lambda which triggers a Dagster job"
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
   DagitSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     DependsOn: VPC
@@ -396,11 +415,9 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 3000
+          FromPort: !Ref DagitHostPort
           ToPort: !Ref DagitHostPort
-          CidrIp: !Ref DagitSGCIDR
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: -1
+          SourceSecurityGroupId: !Ref DagsterTriggerOneOffSecurityGroup
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: -1
@@ -488,6 +505,10 @@ Outputs:
     Description: Security group for the Daemon
     Value: !Ref DaemonSecurityGroup
 
+  DagsterTriggerOneOffSecurityGroup:
+    Description: Security group for the One Off Dagster Trigger Lambda
+    Value: !Ref DagsterTriggerOneOffSecurityGroup
+
   CodeServerSecurityGroup:
     Description: Security group for the Code Server
     Value: !Ref CodeServerSecurityGroup
@@ -503,3 +524,7 @@ Outputs:
   PrivateServiceDiscoveryNamespace:
     Description: Name of the Namespace for private service discovery. To be used for Service Connect for ECS
     Value: !GetAtt PrivateServiceDiscoveryNamespace.Id
+
+  DagsterWebserverDiscoveryServiceArn:
+    Description: Service Discovery Service for the Dagster Webserver. To be used for Lambda to find the webserver in ECS
+    Value: !GetAtt DagsterWebserverDiscoveryService.Arn
