@@ -44,14 +44,6 @@ Resources:
       Domain: !Sub "${ApplicationName}-${OrganisationName}-${EnvironmentName}"  # Might need to be "${ApplicationName}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com"
       UserPoolId: !Ref CognitoUserPool
 
-  CognitoIdentityPool:
-    Type: AWS::Cognito::IdentityPool
-    Properties:
-      IdentityPoolName: MyIdentityPool
-      AllowUnauthenticatedIdentities: false
-      OpenIdConnectProviderARNs:
-        - "arn:aws:oidc:${AWS::Region}:${AWS::AccountId}:${CognitoUserPool}"
-
 Outputs:
   IdentifierEntitiyId:
     Value: !Sub "urn:amazon:cognito:sp:${CognitoUserPool}"
