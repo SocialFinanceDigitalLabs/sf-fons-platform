@@ -1,0 +1,20 @@
+name: Notify Slack on Dependabot PR
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+on:
+  pull_request:
+    types: [opened]
+    branches:
+      - main
+
+jobs:
+  notify:
+    uses: SocialFinanceDigitalLabs/.github/.github/workflows/dependabot_slack.yml@main
+    with:
+      slack_user_ids: ${{ vars.SLACK_USER_IDS }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
