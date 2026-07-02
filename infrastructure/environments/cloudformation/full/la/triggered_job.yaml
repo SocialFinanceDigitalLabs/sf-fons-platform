@@ -76,18 +76,60 @@ Resources:
           ECS_DAGIT_SERVICE_NAME: !Ref DagitServiceName
           PRIVATE_NAMESPACE: !Ref PrivateServiceDiscoveryNamespace
 
-  TriggerDagsterStateMachineRole:
+  ScheduleDagsterRunScheduleGroup:
+    Type: AWS::Scheduler::ScheduleGroup
+    Properties:
+      Name: !Sub '${ProjectName}-${OrganisationName}-TriggerDagsterScheduleGroup'
+
+  ScheduleDagsterRunRole:
+    # Role to allow Step Function to create schedules in EventBridge Scheduler
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
-              Service: states.amazonaws.com
-            Action: sts:AssumeRole
+              Service:
+                - states.amazonaws.com
+            Action:
+              - sts:AssumeRole
       Policies:
-        - PolicyName: TriggerDagsterStateMachinePolicy
+        - PolicyName: CreateDagsterSchedules
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - scheduler:CreateSchedule
+                  - scheduler:GetSchedule
+                  - scheduler:DeleteSchedule
+                Resource:
+                  - !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule-group/${ScheduleDagsterRunScheduleGroup}'
+                  - !Sub 'arn:aws:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/${ScheduleDagsterRunScheduleGroup}/*'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt EventBridgeSchedulerExecutionRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: scheduler.amazonaws.com
+
+  EventBridgeSchedulerExecutionRole:
+    # Role to allow EventBridge Scheduler to invoke the lambda
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - scheduler.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: TriggerDagsterLambdaPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -97,26 +139,86 @@ Resources:
                 Resource:
                   - !GetAtt TriggerDagsterJobLambda.Arn
 
-  TriggerDagsterStateMachine:
+  ScheduleDagsterRunStateMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
-      StateMachineName: !Sub '${ProjectName}-${OrganisationName}-TriggerDagsterStateMachine'
-      RoleArn: !GetAtt TriggerDagsterStateMachineRole.Arn
+      StateMachineName: ScheduleDagsterRun
+      RoleArn: !GetAtt ScheduleDagsterRunRole.Arn
       DefinitionString:
         Fn::Sub: |
           {
-            "Comment": "Trigger a Dagster job via Lambda",
-            "StartAt": "InvokeDagsterLambda",
+            "Comment": "Create a one-time Dagster schedule",
+            "StartAt": "ValidateInput",
             "States": {
-              "InvokeDagsterLambda": {
+              "ValidateInput": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "And": [
+                      {
+                        "Variable": "$.dataset",
+                        "IsPresent": true
+                      },
+                      {
+                        "Variable": "$.day",
+                        "IsPresent": true
+                      },
+                      {
+                        "Variable": "$.time",
+                        "IsPresent": true
+                      },
+                      {
+                        "Variable": "$.day",
+                        "StringMatches": "****-**-**"
+                      },
+                      {
+                        "Variable": "$.time",
+                        "StringMatches": "**:**"
+                      }
+                    ],
+                    "Next": "CreateSchedule"
+                  }
+                ],
+                "Default": "InvalidInput"
+              },
+              "CreateSchedule": {
                 "Type": "Task",
-                "Resource": "arn:aws:states:::lambda:invoke",
-                "OutputPath": "$.Payload",
+                "Resource": "arn:aws:states:::aws-sdk:scheduler:createSchedule",
                 "Parameters": {
-                  "FunctionName": "${TriggerDagsterJobLambda.Arn}",
-                  "Payload.$": "$"
+                  "Name.$": "States.Format('dagster-{}', $$.Execution.Name)",
+                  "GroupName": "${ProjectName}-${OrganisationName}-TriggerDagsterScheduleGroup",
+                  "ScheduleExpression.$":
+                    "States.Format('at({}T{}:00)', $.day, $.time)",
+                  "ScheduleExpressionTimezone": "Europe/London",
+                  "FlexibleTimeWindow": {
+                    "Mode": "OFF"
+                  },
+                  "State": "ENABLED",
+                  "Target": {
+                    "Arn": "${TriggerDagsterJobLambda.Arn}",
+                    "RoleArn": "${EventBridgeSchedulerExecutionRole.Arn}",
+                    "Input.$": "States.JsonToString($)"
+                  }
+                },
+                "ResultPath": "$.schedule",
+                "Next": "Success"
+              },
+              "Success": {
+                "Type": "Pass",
+                "Parameters": {
+                  "message": "Dagster run successfully scheduled",
+                  "dataset.$": "$.dataset",
+                  "day.$": "$.day",
+                  "time.$": "$.time",
+                  "timezone": "Europe/London"
                 },
                 "End": true
+              },
+              "InvalidInput": {
+                "Type": "Fail",
+                "Error": "InvalidInput",
+                "Cause": "Expected input: {\"dataset\":\"name\",\"day\":\"YYYY-MM-DD\",\"time\":\"HH:mm\"}"
               }
+  
             }
           }
