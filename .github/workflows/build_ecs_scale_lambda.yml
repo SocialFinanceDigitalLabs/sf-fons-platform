@@ -50,14 +50,9 @@ jobs:
 
           cp ecs_scale/handler.py build/handler.py
 
-      - name: Create deployment zip
-        run: |
-          cd build
-          zip -r ../ecs-scaling-lambda.zip .
-
       - name: Upload artifact for deploy jobs
         uses: actions/upload-artifact@v4
         with:
-          name: lambda-zip
-          path: ./infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/ecs-scaling-lambda.zip
+          name: ecs-scaling-lambda
+          path: ./infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/build/
           retention-days: 1
