@@ -21,10 +21,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
@@ -51,7 +51,7 @@ jobs:
           cp ecs_scale/handler.py build/handler.py
 
       - name: Upload artifact for deploy jobs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ecs-scaling-lambda
           path: ./infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/build/
