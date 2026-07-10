@@ -123,7 +123,7 @@ Resources:
         S3Key: ecs-scaling-lambda.zip
       Role: !GetAtt FonsDagsterScalingLambdaRole.Arn
       Handler: handler.lambda_handler
-      Runtime: python3.11
+      Runtime: python3.13
       Timeout: 60
       Environment:
         Variables:
