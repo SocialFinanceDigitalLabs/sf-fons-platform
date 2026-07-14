@@ -13,46 +13,8 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: ./infrastructure/environments/cloudformation/full/common/lambda/ecs_scale
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-
-      - name: Install Poetry Export Plugin
-        run: poetry self add poetry-plugin-export
-
-      - name: Build Lambda package
-        run: |
-          rm -rf build
-          mkdir build
-
-          poetry export \
-            -f requirements.txt \
-            --output requirements.txt \
-            --without-hashes
-
-          python -m pip install \
-            -r requirements.txt \
-            --target build
-
-          cp ecs_scale/handler.py build/handler.py
-
-      - name: Upload artifact for deploy jobs
-        uses: actions/upload-artifact@v7
-        with:
-          name: ecs-scaling-lambda
-          path: ./infrastructure/environments/cloudformation/full/common/lambda/ecs_scale/build/
-          retention-days: 1
+    uses: ./.github/workflows/build_lambda_base.yml
+    with:
+      lambda-directory: ./infrastructure/environments/cloudformation/full/common/lambda/ecs_scale
+      handler-folder: ecs_scale
+      artifact-name: ecs-scaling-lambda
