@@ -1,0 +1,20 @@
+name: Package Trigger Dagster Lambda
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infrastructure/environments/cloudformation/full/la/lambda/trigger_dagster_job/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/build_lambda_base.yml
+    with:
+      lambda-directory: ./infrastructure/environments/cloudformation/full/la/lambda/trigger_dagster_job
+      handler-folder: trigger_dagster_job
+      artifact-name: trigger-dagster-job
