@@ -6,8 +6,13 @@ up the Dagster Webserver ECS service to ensure there is at least one running tas
 the webserver endpoint is reachable, the mutation is sent to trigger the job. Then the
 ECS service is scaled back down to zero tasks.
 
+## Automated Process
+There is a Github Action, called "Package Trigger Dagster Lambda" that will package 
+this lambda function. To fully deploy, you need to upload to the relevant S3 bucket
+and then update the lambda function to use the new zip file.
+
 ## Manual Process
-To package this, do the following:
+If the Github Action fails, you can manually package this:
 
 1. If it doesn't exist, make the package directory
 ```commandline
@@ -33,7 +38,3 @@ cd ../trigger_dagster_job
 zip ../trigger-dagster-job.zip ./handler.py
 ```
 6. The zip should have a flat directory structure, ready to be uploaded to s3
-
-## Automated Process
-To do. The above process could be done via a github actions and then an upload step could push this to s3,
-and redeployed to the lambda. 

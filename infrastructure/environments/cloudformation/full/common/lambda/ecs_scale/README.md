@@ -1,7 +1,12 @@
 # Scaling Lambda
 
+## Automated Process
+There is a Github Action, called "Package Scaling Lambda" that will package 
+this lambda function. To fully deploy, you need to upload to the relevant S3 bucket
+and then update the lambda function to use the new zip file.
+
 ## Manual Process
-To package this, do the following:
+To manually package this, do the following:
 
 1. If it doesn't exist, make the package directory
 ```commandline
@@ -22,7 +27,3 @@ cd ../ecs_scale
 zip ../ecs-scaling-lambda.zip ./handler.py
 ```
 5. The zip should have a flat directory structure, ready to be uploaded to s3
-
-## Automated Process
-To do. The above process could be done via a github actions and then an upload step could push this to s3,
-and redeployed to the lambda. 
