@@ -51,6 +51,11 @@ jobs:
       - name: Install Poetry Export Plugin
         run: poetry self add poetry-plugin-export
 
+      - name: Get lambda version
+        id: version
+        run: |
+          echo "version=$(poetry version -s)" >> $GITHUB_OUTPUT
+
       - name: Build Lambda package
         run: |
           rm -rf build
@@ -70,6 +75,6 @@ jobs:
       - name: Upload artifact for deploy jobs
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.artifact-name }}
+          name: ${{ inputs.artifact-name }}-${{ steps.version.outputs.version }}
           path: ${{ inputs.lambda-directory }}/build
           retention-days: ${{ inputs.retention-days }}
