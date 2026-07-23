@@ -32,6 +32,9 @@ Parameters:
     Type: String
     Description: Namespace for private network.
     Default: my-namespace.local
+  LambdaVersion:
+    Type: String
+    Description: Version of the Lambda function to use. When this is updated, the Lambda function will update itself to the new version.
 
 Resources:
   TriggerDagsterJobLambdaRole:
@@ -62,7 +65,7 @@ Resources:
     Properties:
       Code:
         S3Bucket: !Ref LambdaCodeBucket
-        S3Key: trigger-dagster-job.zip
+        S3Key: !Sub "trigger-dagster-job/trigger-dagster-job-${LambdaVersion}.zip"
       Role: !GetAtt TriggerDagsterJobLambdaRole.Arn
       Handler: handler.lambda_handler
       Runtime: python3.13
