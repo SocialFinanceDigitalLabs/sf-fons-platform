@@ -1,0 +1,765 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  ECS Fargate migration stack for a Django Docker application.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: staging
+    Description: Environment name.
+  ProjectName:
+    Type: String
+    Default: fons
+    Description: Project/application name used in resource naming.
+  OrganisationName:
+    Type: String
+    Description: Organisation or local authority name.
+  VpcCIDR:
+    Type: String
+    Default: 10.193.0.0/16
+  PublicSubnet1CIDR:
+    Type: String
+    Default: 10.193.10.0/24
+  PublicSubnet2CIDR:
+    Type: String
+    Default: 10.193.11.0/24
+  PrivateAppSubnet1CIDR:
+    Type: String
+    Default: 10.193.20.0/24
+  PrivateAppSubnet2CIDR:
+    Type: String
+    Default: 10.193.21.0/24
+  PrivateDbSubnet1CIDR:
+    Type: String
+    Default: 10.193.30.0/24
+  PrivateDbSubnet2CIDR:
+    Type: String
+    Default: 10.193.31.0/24
+
+  ContainerImage:
+    Type: String
+    Description: Full container image URI.
+  ContainerPort:
+    Type: Number
+    Default: 8000
+    Description: Port exposed by the Django/gunicorn container.
+  ContainerCpu:
+    Type: String
+    Default: "1024"
+    Description: ECS task CPU units.
+  ContainerMemory:
+    Type: String
+    Default: "2048"
+    Description: ECS task memory in MB.
+  DesiredCount:
+    Type: Number
+    Default: 1
+    Description: Number of ECS tasks to run.
+
+  AlbIdleTimeoutSeconds:
+    Type: Number
+    Default: 300
+    MinValue: 1
+    MaxValue: 4000
+    Description: ALB idle timeout.
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN for HTTPS on the ALB.
+  HealthCheckPath:
+    Type: String
+    Default: /health/
+    Description: Health check path served by Django.
+  WebsiteUrl:
+    Type: String
+    Description: Public website hostname. Do not include https://.
+  DataStoreBucketName:
+    Type: String
+    Description: Existing S3 bucket name used for uploaded and processed files.
+
+  DataStoreBucketArn:
+    Type: String
+    Description: Existing S3 bucket ARN used for uploaded and processed files.
+  CognitoUserPoolId:
+    Type: String
+    Description: Cognito user pool ID.
+  CognitoAppClientId:
+    Type: String
+    Description: Cognito app client ID.
+  CognitoAppDomain:
+    Type: String
+    Description: Cognito app domain.
+  ExistingDjangoSecretKeySecretArn:
+    Type: String
+    Default: ""
+    Description: >
+      Optional existing Secrets Manager secret ARN containing the Django secret key.
+      Leave blank to create a generated secret.
+
+  DBName:
+    Type: String
+    Default: postgres
+  DBUsername:
+    Type: String
+    Default: postgres
+  DBInstanceClass:
+    Type: String
+    Default: db.t4g.small
+    Description: RDS PostgreSQL instance class.
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+  DBMaxAllocatedStorage:
+    Type: Number
+    Default: 100
+  DBEngineVersion:
+    Type: String
+    Default: "16.3"
+    Description: PostgreSQL engine version.
+  DBDeletionProtection:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+
+  # App Config
+  AllowedDatasets:
+    Type: String
+    Default: "ssda903,cin"
+    Description: Comma-separated list of allowed datasets for upload
+
+Conditions:
+  CreateDjangoSecretKey: !Equals [!Ref ExistingDjangoSecretKeySecretArn, ""]
+  IsProd: !Equals [!Ref Environment, prod]
+  EnableDBDeletionProtection: !Equals [!Ref DBDeletionProtection, "true"]
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-webapp-vpc"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Organisation
+          Value: !Ref OrganisationName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-webapp-igw"
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-webapp-public-a"
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-webapp-public-b"
+
+  PrivateAppSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Ref PrivateAppSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-webapp-private-a"
+
+  PrivateAppSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Ref PrivateAppSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-webapp-private-b"
+
+  PrivateDbSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Ref PrivateDbSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-db-private-a"
+
+  PrivateDbSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Ref PrivateDbSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-db-private-b"
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-webapp-public-rt"
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  NatGatewayEip:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEip.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-webapp-nat-a"
+
+  PrivateAppRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-webapp-private-rt"
+
+  PrivateAppDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateAppRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateAppSubnet1RouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateAppSubnet1
+      RouteTableId: !Ref PrivateAppRouteTable
+
+  PrivateAppSubnet2RouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateAppSubnet2
+      RouteTableId: !Ref PrivateAppRouteTable
+
+  PrivateDbRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-db-private-rt"
+
+  PrivateDbSubnet1RouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateDbSubnet1
+      RouteTableId: !Ref PrivateDbRouteTable
+
+  PrivateDbSubnet2RouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateDbSubnet2
+      RouteTableId: !Ref PrivateDbRouteTable
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public ALB security group.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: HTTP from internet, redirected to HTTPS.
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - Description: HTTPS from internet.
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - Description: Allow outbound to app tasks.
+          IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-webapp-alb-sg"
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ECS task security group. Only ALB may call the container port.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: App traffic from ALB only.
+          IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      SecurityGroupEgress:
+        - Description: Outbound access for database, S3, ECR, Secrets Manager and external APIs.
+          IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-app-sg"
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS PostgreSQL security group.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: PostgreSQL from ECS tasks only.
+          IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+      SecurityGroupEgress:
+        - Description: Allow outbound.
+          IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-webapp-db-sg"
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-alb"
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: !Ref AlbIdleTimeoutSeconds
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  AppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-webapp-tg"
+      VpcId: !Ref Vpc
+      Protocol: HTTP
+      Port: !Ref ContainerPort
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            Host: "#{host}"
+            Path: "/#{path}"
+            Query: "#{query}"
+            StatusCode: HTTP_301
+
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AppTargetGroup
+
+  DjangoSecretKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: CreateDjangoSecretKey
+    Properties:
+      Name: !Sub "${ProjectName}/${Environment}/django-secret-key"
+      Description: !Sub "Generated Django secret key for ${ProjectName} ${Environment}"
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  DBCredentialsSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${ProjectName}/${Environment}/database"
+      Description: !Sub "RDS PostgreSQL credentials for ${ProjectName} ${Environment}"
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DBUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "DB subnet group for ${ProjectName} ${Environment}"
+      SubnetIds:
+        - !Ref PrivateDbSubnet1
+        - !Ref PrivateDbSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-db-subnet-group"
+
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub "${ProjectName}-${Environment}-postgres"
+      Engine: postgres
+      EngineVersion: !Ref DBEngineVersion
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref DBAllocatedStorage
+      MaxAllocatedStorage: !Ref DBMaxAllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: !Ref DBName
+      Port: "5432"
+      MasterUsername: !Sub "{{resolve:secretsmanager:${DBCredentialsSecret}:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBCredentialsSecret}:SecretString:password}}"
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      PubliclyAccessible: false
+      BackupRetentionPeriod: !If [IsProd, 7, 1]
+      DeletionProtection: !If [EnableDBDeletionProtection, true, false]
+      AutoMinorVersionUpgrade: true
+      CopyTagsToSnapshot: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Organisation
+          Value: !Ref OrganisationName
+
+  DatabaseSecretAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DBCredentialsSecret
+      TargetId: !Ref DatabaseInstance
+      TargetType: AWS::RDS::DBInstance
+
+  AppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${ProjectName}/${Environment}/webapp"
+      RetentionInDays: !If [IsProd, 90, 30]
+
+  AppTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: ECS task execution role for image pulls, logs and secret injection.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadContainerSecrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadSecretsForTaskStartup
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DBCredentialsSecret
+                  - !If
+                    - CreateDjangoSecretKey
+                    - !Ref DjangoSecretKeySecret
+                    - !Ref ExistingDjangoSecretKeySecretArn
+              - Sid: PullDockerImage
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: "arn:aws:secretsmanager:eu-west-2:260477567664:secret:dockerhub-sysadmin-credentials-5Lb3FI"
+              - Sid: Decrypt KMSKey
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: "arn:aws:kms:eu-west-2:260477567664:key/69dd8f98-e08c-4410-840f-ab1ea78ef2b2"
+
+  AppTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Application task role used by Django at runtime.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AppS3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ListDataBucket
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Ref DataStoreBucketArn
+              - Sid: ReadWriteDataObjects
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub "${DataStoreBucketArn}/*"
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${ProjectName}-${Environment}-webapp-cluster"
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  AppTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${ProjectName}-${Environment}-webapp"
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      ExecutionRoleArn: !GetAtt AppTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt AppTaskRole.Arn
+      ContainerDefinitions:
+        - Name: web
+          Image: !Ref ContainerImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              Protocol: tcp
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: ENVIRONMENT
+              Value: !Ref Environment
+            - Name: PROJECT_NAME
+              Value: !Ref ProjectName
+            - Name: WEBSITE_URL
+              Value: !Ref WebsiteUrl
+            - Name: ALLOWED_DATASETS
+              Value: !Ref AllowedDatasets
+            - Name: ALLOWED_HOSTS
+              Value: !Sub "${WebsiteUrl},${ApplicationLoadBalancer.DNSName}"
+            - Name: TRUSTED_ORIGINS
+              Value: !Sub "https://${WebsiteUrl},https://${ApplicationLoadBalancer.DNSName}"
+            - Name: AWS_COGNITO_USER_POOL_ID
+              Value: !Ref CognitoUserPoolId
+            - Name: AWS_COGNITO_APP_CLIENT_ID
+              Value: !Ref CognitoAppClientId
+            - Name: AWS_COGNITO_DOMAIN
+              Value: !Ref CognitoAppDomain
+            - Name: SF_FS_BACKEND_URL
+              Value: !Sub "s3://${DataStoreBucketName}"
+            - Name: DATA_STORE_BUCKET_NAME
+              Value: !Ref DataStoreBucketName
+            - Name: DB_HOST
+              Value: !GetAtt DatabaseInstance.Endpoint.Address
+            - Name: DB_PORT
+              Value: "5432"
+            - Name: DB_NAME
+              Value: !Ref DBName
+            - Name: "DJANGO_ENV"
+              Value: !Ref Environment
+          Secrets:
+            - Name: DJANGO_SECRET_KEY
+              ValueFrom: !If
+                - CreateDjangoSecretKey
+                - !Ref DjangoSecretKeySecret
+                - !Ref ExistingDjangoSecretKeySecretArn
+            - Name: DB_USERNAME
+              ValueFrom: !Sub "${DBCredentialsSecret}:username::"
+            - Name: DB_PASSWORD
+              ValueFrom: !Sub "${DBCredentialsSecret}:password::"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref AppLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: django
+
+  AppService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - HttpsListener
+      - DatabaseInstance
+    Properties:
+      ServiceName: !Sub "${ProjectName}-${Environment}-webapp"
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref AppTaskDefinition
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      DesiredCount: !Ref DesiredCount
+      #### To remove on prod
+      EnableExecuteCommand: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !Ref AppSecurityGroup
+          Subnets:
+            - !Ref PrivateAppSubnet1
+            - !Ref PrivateAppSubnet2
+      LoadBalancers:
+        - ContainerName: web
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref AppTargetGroup
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  AlbDnsName:
+    Description: ALB DNS name.
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  AlbHostedZoneId:
+    Description: ALB hosted zone ID, useful for Route 53 alias records.
+    Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+
+  EcsClusterName:
+    Description: ECS cluster name.
+    Value: !Ref EcsCluster
+
+  EcsServiceName:
+    Description: ECS service name.
+    Value: !GetAtt AppService.Name
+
+  TaskDefinitionArn:
+    Description: ECS task definition ARN.
+    Value: !Ref AppTaskDefinition
+
+  DatabaseEndpointAddress:
+    Description: RDS PostgreSQL endpoint address.
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
+
+  DatabaseEndpointPort:
+    Description: RDS PostgreSQL endpoint port.
+    Value: !GetAtt DatabaseInstance.Endpoint.Port
+
+  DatabaseCredentialsSecretArn:
+    Description: Secrets Manager ARN for database credentials.
+    Value: !Ref DBCredentialsSecret
+
+  DjangoSecretKeySecretArn:
+    Description: Secrets Manager ARN for Django secret key.
+    Value: !If
+      - CreateDjangoSecretKey
+      - !Ref DjangoSecretKeySecret
+      - !Ref ExistingDjangoSecretKeySecretArn
+
+  CloudWatchLogGroup:
+    Description: CloudWatch log group for the Django container.
+    Value: !Ref AppLogGroup
