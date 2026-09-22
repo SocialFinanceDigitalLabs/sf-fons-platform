@@ -129,6 +129,13 @@ Parameters:
     Type: String
     Description: The time (in seconds) the dagster daemon will wait for sensors and schedules to complete.
     Default: 60
+  HashSecretArn:
+    Type: String
+    Description: ARN of the Secrets Manager secret containing the HMAC hashing key
+  HashSecretVersion:
+    Type: String
+    Default: "1"
+    Description: Version identifier for the hashing key
 
   # Database Parameters
   DBStorageSize:
@@ -426,6 +433,15 @@ Resources:
                 Action:
                   - kms:Decrypt
                 Resource: "arn:aws:kms:eu-west-2:260477567664:key/69dd8f98-e08c-4410-840f-ab1ea78ef2b2"
+        - PolicyName: ReadHashSecret
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref HashSecretArn
 
   CodeServerTaskRole:
     Type: AWS::IAM::Role
@@ -650,6 +666,9 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-create-group: true
               awslogs-stream-prefix: "dagster-user-code"
+          Secrets:
+            - Name: HASH_SECRET_KEY
+              ValueFrom: !Ref HashSecretArn
           Environment:
             - Name: CODE_FOLDER
               Value: !Ref CodeServerPipelineFolder
@@ -691,6 +710,8 @@ Resources:
               Value: !Ref SensorMinimumInterval
             - Name: DAGSTER_GRPC_TIMEOUT_SECONDS
               Value: !Ref DagsterGRPCTimeout
+            - Name: HASH_SECRET_VERSION
+              Value: !Ref HashSecretVersion
       Tags:
         - Key: Project
           Value: !Ref ProjectName
