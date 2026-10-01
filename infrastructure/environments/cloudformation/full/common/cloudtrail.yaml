@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  This template sets up a CloudTrail to log S3 data events. Management events are collected centrally for the AWS Organization.
+
+Parameters:
+  Environment:
+    Type: String
+    Description: The name for the environment (e.g. dev, staging, prod). LOWER CASE, NO SPACES
+
+  AppName:
+    Type: String
+    Default: fons
+    Description: The name for the application or instance.  LOWER CASE, NO SPACES
+
+  OrganisationName:
+    Type: String
+    Description: The name for the organisation. LOWER CASE, NO SPACES
+
+  S3DataEventBuckets:
+    Type: CommaDelimitedList
+    Description: A comma delimited list of S3 bucket ARNs to log data events for. An example is "arn:aws:s3:::my-bucket/,arn:aws:s3:::another-bucket/"
+
+  AutoFileDeletion:
+    Type: Number
+    Description: Number of days after which to automatically delete CloudTrail log files
+    Default: 90
+
+Resources:
+  CloudTrailLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AppName}-${OrganisationName}-${Environment}-cloudtrail-logs"
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteContentAfterDays
+            ExpirationInDays: !Ref AutoFileDeletion
+            Status: 'Enabled'
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailLogBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AllowCloudTrailWrite"
+            Effect: "Allow"
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: "s3:PutObject"
+            Resource: !Join [ '', [ !GetAtt CloudTrailLogBucket.Arn, "/AWSLogs/", !Ref AWS::AccountId, "/*" ] ]
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
+                # Construct the source ARN rather than reference it because a reference causes a circular dependency
+                "aws:SourceArn": !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AppName}-${OrganisationName}-${Environment}-s3-data-trail"
+          - Sid: "AllowCloudTrailAclCheck"
+            Effect: "Allow"
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: "s3:GetBucketAcl"
+            Resource: !GetAtt CloudTrailLogBucket.Arn
+            Condition:
+              StringEquals:
+                # Construct the source ARN rather than reference it because a reference causes a circular dependency
+                "aws:SourceArn": !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AppName}-${OrganisationName}-${Environment}-s3-data-trail"
+
+  AccountS3DataTrail:
+    # The trail can only be created after the bucket policy is in place
+    DependsOn: CloudTrailBucketPolicy
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub "${AppName}-${OrganisationName}-${Environment}-s3-data-trail"
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+      IsLogging: true
+      S3BucketName: !Ref CloudTrailLogBucket
+
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: false
+          DataResources:
+            - Type: AWS::S3::Object
+              Values: !Ref S3DataEventBuckets
