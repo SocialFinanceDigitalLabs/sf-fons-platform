@@ -80,6 +80,9 @@ In order to set this up, use the full directory in the cloudformation folder. Br
      * Add the lambda zip file to the appropriate bucket before creating this infrastructure. Follow
      these [instructions](../infrastructure/environments/cloudformation/full/la/lambda/trigger_dagster_job/README.md)
 
+   9. la/web_filesystem.yaml
+      * Use the VPC and WebFilesystem subnet outputs from la/vpc.yaml.
+
 ## Transfer to Azure Blob Storage
 If a transfer from the Organisation egress S3 bucket to Azure blob storage is required,
 set ExportToAzure in the [`vpc` stack](../infrastructure/environments/cloudformation/full/organisation/vpc.yaml)

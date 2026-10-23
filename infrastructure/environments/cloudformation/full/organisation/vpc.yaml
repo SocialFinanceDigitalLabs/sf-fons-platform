@@ -87,6 +87,8 @@ Parameters:
     Description: Whether to export final data to Azure. If set to "true", required resources will be created in this stack
 
 Conditions:
+  IsDev: !Equals [ !Ref Environment, "dev" ]
+  IsNotDev: !Not [ !Condition IsDev ]
   ExportToAzureCondition: !Equals [ !Ref ExportToAzure, "true" ]
 
 Resources:
@@ -171,24 +173,28 @@ Resources:
 
   NatGatewayDatabaseEIP1:
     Type: AWS::EC2::EIP
+    Condition: IsNotDev
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
 
   NatGatewayDatabaseEIP2:
     Type: AWS::EC2::EIP
+    Condition: IsNotDev
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
 
   NatGatewayDatabase1:
     Type: AWS::EC2::NatGateway
+    Condition: IsNotDev
     Properties:
       AllocationId: !GetAtt NatGatewayDatabaseEIP1.AllocationId
       SubnetId: !Ref DatabaseSubnet1
 
   NatGatewayDatabase2:
     Type: AWS::EC2::NatGateway
+    Condition: IsNotDev
     Properties:
       AllocationId: !GetAtt NatGatewayDatabaseEIP2.AllocationId
       SubnetId: !Ref DatabaseSubnet2
@@ -421,8 +427,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3000
           ToPort: !Ref DagitHostPort
-          CidrIp: !Ref DagitSGCIDR
-        - CidrIp: 0.0.0.0/0
+          CidrIp: !If [ IsDev, !Ref VpcCIDR, !Ref DagitSGCIDR ]
+        - CidrIp: !If [ IsDev, !Ref VpcCIDR, "0.0.0.0/0" ]
           IpProtocol: -1
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0

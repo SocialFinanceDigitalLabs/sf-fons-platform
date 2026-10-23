@@ -5,7 +5,7 @@ Description: >
 Parameters:
   Environment:
     Type: String
-    Default: staging
+    Default: dev
     Description: Environment name.
   ProjectName:
     Type: String
@@ -14,27 +14,28 @@ Parameters:
   OrganisationName:
     Type: String
     Description: Organisation or local authority name.
-  VpcCIDR:
+  ApplicationName:
     Type: String
-    Default: 10.193.0.0/16
-  PublicSubnet1CIDR:
-    Type: String
-    Default: 10.193.10.0/24
-  PublicSubnet2CIDR:
-    Type: String
-    Default: 10.193.11.0/24
-  PrivateAppSubnet1CIDR:
-    Type: String
-    Default: 10.193.20.0/24
-  PrivateAppSubnet2CIDR:
-    Type: String
-    Default: 10.193.21.0/24
-  PrivateDbSubnet1CIDR:
-    Type: String
-    Default: 10.193.30.0/24
-  PrivateDbSubnet2CIDR:
-    Type: String
-    Default: 10.193.31.0/24
+    Default: web-filesystem
+    AllowedValues:
+      - web-filesystem
+    Description: Application name used in resource naming.
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Existing LA VPC ID from the VPC stack
+  WebFilesystemPublicSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Web filesystem public subnet in AZ1 from the VPC stack.
+  WebFilesystemPublicSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Web filesystem public subnet in AZ2 from the VPC stack.
+  WebFilesystemPrivateSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Web filesystem private subnet in AZ1 from the VPC stack.
+  WebFilesystemPrivateSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Web filesystem private subnet in AZ2 from the VPC stack.
 
   ContainerImage:
     Type: String
@@ -122,10 +123,37 @@ Parameters:
       - "true"
       - "false"
 
-  # App Config
+  Debug:
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Enable Django debug mode
+
+  UseSSO:
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Enable Cognito SSO for the Django application
+
+  WriteOnlyView:
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Enable write-only mode for the Django application
+
+  MaxUploadSize:
+    Type: Number
+    Description: Maximum upload size in bytes
+
+  PipelinesWithYearValidation:
+    Type: String
+    Description: Comma-separated pipelines requiring year validation
+
   AllowedDatasets:
     Type: String
-    Default: "ssda903,cin"
     Description: Comma-separated list of allowed datasets for upload
 
 Conditions:
@@ -134,196 +162,11 @@ Conditions:
   EnableDBDeletionProtection: !Equals [!Ref DBDeletionProtection, "true"]
 
 Resources:
-  Vpc:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: !Ref VpcCIDR
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webapp-vpc"
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Organisation
-          Value: !Ref OrganisationName
-
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webapp-igw"
-
-  InternetGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref Vpc
-      InternetGatewayId: !Ref InternetGateway
-
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      AvailabilityZone: !Select [0, !GetAZs ""]
-      CidrBlock: !Ref PublicSubnet1CIDR
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webapp-public-a"
-
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      AvailabilityZone: !Select [1, !GetAZs ""]
-      CidrBlock: !Ref PublicSubnet2CIDR
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webapp-public-b"
-
-  PrivateAppSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      AvailabilityZone: !Select [0, !GetAZs ""]
-      CidrBlock: !Ref PrivateAppSubnet1CIDR
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webapp-private-a"
-
-  PrivateAppSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      AvailabilityZone: !Select [1, !GetAZs ""]
-      CidrBlock: !Ref PrivateAppSubnet2CIDR
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webapp-private-b"
-
-  PrivateDbSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      AvailabilityZone: !Select [0, !GetAZs ""]
-      CidrBlock: !Ref PrivateDbSubnet1CIDR
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-db-private-a"
-
-  PrivateDbSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      AvailabilityZone: !Select [1, !GetAZs ""]
-      CidrBlock: !Ref PrivateDbSubnet2CIDR
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-db-private-b"
-
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref Vpc
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webapp-public-rt"
-
-  PublicDefaultRoute:
-    Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  PublicSubnet1RouteAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnet2RouteAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
-
-  NatGatewayEip:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
-
-  NatGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatGatewayEip.AllocationId
-      SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webapp-nat-a"
-
-  PrivateAppRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref Vpc
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webapp-private-rt"
-
-  PrivateAppDefaultRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateAppRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
-
-  PrivateAppSubnet1RouteAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateAppSubnet1
-      RouteTableId: !Ref PrivateAppRouteTable
-
-  PrivateAppSubnet2RouteAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateAppSubnet2
-      RouteTableId: !Ref PrivateAppRouteTable
-
-  PrivateDbRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref Vpc
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-db-private-rt"
-
-  PrivateDbSubnet1RouteAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateDbSubnet1
-      RouteTableId: !Ref PrivateDbRouteTable
-
-  PrivateDbSubnet2RouteAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateDbSubnet2
-      RouteTableId: !Ref PrivateDbRouteTable
-
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Public ALB security group.
-      VpcId: !Ref Vpc
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - Description: HTTP from internet, redirected to HTTPS.
           IpProtocol: tcp
@@ -341,13 +184,13 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webapp-alb-sg"
+          Value: !Sub "${ProjectName}-${Environment}-${ApplicationName}-alb-sg"
 
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ECS task security group. Only ALB may call the container port.
-      VpcId: !Ref Vpc
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - Description: App traffic from ALB only.
           IpProtocol: tcp
@@ -360,13 +203,13 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-app-sg"
+          Value: !Sub "${ProjectName}-${Environment}-${ApplicationName}-app-sg"
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: RDS PostgreSQL security group.
-      VpcId: !Ref Vpc
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - Description: PostgreSQL from ECS tasks only.
           IpProtocol: tcp
@@ -379,20 +222,20 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-webapp-db-sg"
+          Value: !Sub "${ProjectName}-${Environment}-${ApplicationName}-db-sg"
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${ProjectName}-${Environment}-alb"
+      Name: !Sub "${ProjectName}-${Environment}-${ApplicationName}-alb"
       Type: application
       Scheme: internet-facing
       IpAddressType: ipv4
       SecurityGroups:
         - !Ref AlbSecurityGroup
       Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+        - !Ref WebFilesystemPublicSubnet1
+        - !Ref WebFilesystemPublicSubnet2
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: !Ref AlbIdleTimeoutSeconds
@@ -405,8 +248,8 @@ Resources:
   AppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${ProjectName}-${Environment}-webapp-tg"
-      VpcId: !Ref Vpc
+      Name: !Sub "${ProjectName}-${Environment}-${ApplicationName}-tg"
+      VpcId: !Ref VpcId
       Protocol: HTTP
       Port: !Ref ContainerPort
       TargetType: ip
@@ -418,7 +261,6 @@ Resources:
       UnhealthyThresholdCount: 5
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 10
-
 
   HttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -453,7 +295,7 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Condition: CreateDjangoSecretKey
     Properties:
-      Name: !Sub "${ProjectName}/${Environment}/django-secret-key"
+      Name: !Sub "${ProjectName}/${Environment}/${ApplicationName}/django-secret-key"
       Description: !Sub "Generated Django secret key for ${ProjectName} ${Environment}"
       GenerateSecretString:
         PasswordLength: 64
@@ -467,7 +309,7 @@ Resources:
   DBCredentialsSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub "${ProjectName}/${Environment}/database"
+      Name: !Sub "${ProjectName}/${Environment}/${ApplicationName}/database"
       Description: !Sub "RDS PostgreSQL credentials for ${ProjectName} ${Environment}"
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username":"${DBUsername}"}'
@@ -483,20 +325,20 @@ Resources:
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: !Sub "DB subnet group for ${ProjectName} ${Environment}"
+      DBSubnetGroupDescription: !Sub "DB subnet group for ${ProjectName} ${Environment} web app"
       SubnetIds:
-        - !Ref PrivateDbSubnet1
-        - !Ref PrivateDbSubnet2
+        - !Ref WebFilesystemPrivateSubnet1
+        - !Ref WebFilesystemPrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-db-subnet-group"
+          Value: !Sub "${ProjectName}-${Environment}-${ApplicationName}-db-subnet-group"
 
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-${Environment}-postgres"
+      DBInstanceIdentifier: !Sub "${ProjectName}-${Environment}-${ApplicationName}-postgres"
       Engine: postgres
       EngineVersion: !Ref DBEngineVersion
       DBInstanceClass: !Ref DBInstanceClass
@@ -534,7 +376,7 @@ Resources:
   AppLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/ecs/${ProjectName}/${Environment}/webapp"
+      LogGroupName: !Sub "/ecs/${ProjectName}/${Environment}/${ApplicationName}"
       RetentionInDays: !If [IsProd, 90, 30]
 
   AppTaskExecutionRole:
@@ -570,7 +412,7 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource: "arn:aws:secretsmanager:eu-west-2:260477567664:secret:dockerhub-sysadmin-credentials-5Lb3FI"
-              - Sid: Decrypt KMSKey
+              - Sid: DecryptKMSKey
                 Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -610,7 +452,7 @@ Resources:
   EcsCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "${ProjectName}-${Environment}-webapp-cluster"
+      ClusterName: !Sub "${ProjectName}-${Environment}-${ApplicationName}-cluster"
       CapacityProviders:
         - FARGATE
         - FARGATE_SPOT
@@ -623,7 +465,7 @@ Resources:
   AppTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub "${ProjectName}-${Environment}-webapp"
+      Family: !Sub "${ProjectName}-${Environment}-${ApplicationName}"
       RequiresCompatibilities:
         - FARGATE
       NetworkMode: awsvpc
@@ -649,6 +491,16 @@ Resources:
               Value: !Ref WebsiteUrl
             - Name: ALLOWED_DATASETS
               Value: !Ref AllowedDatasets
+            - Name: USE_SSO
+              Value: !Ref UseSSO
+            - Name: WRITE_ONLY_VIEW
+              Value: !Ref WriteOnlyView
+            - Name: MAX_UPLOAD_SIZE
+              Value: !Ref MaxUploadSize
+            - Name: PIPELINES_WITH_YEAR_VALIDATION
+              Value: !Ref PipelinesWithYearValidation
+            - Name: DEBUG
+              Value: !Ref Debug
             - Name: ALLOWED_HOSTS
               Value: !Sub "${WebsiteUrl},${ApplicationLoadBalancer.DNSName}"
             - Name: TRUSTED_ORIGINS
@@ -694,13 +546,12 @@ Resources:
       - HttpsListener
       - DatabaseInstance
     Properties:
-      ServiceName: !Sub "${ProjectName}-${Environment}-webapp"
+      ServiceName: !Sub "${ProjectName}-${Environment}-${ApplicationName}"
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref AppTaskDefinition
       LaunchType: FARGATE
       PlatformVersion: LATEST
       DesiredCount: !Ref DesiredCount
-      #### To remove on prod
       EnableExecuteCommand: true
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -708,8 +559,8 @@ Resources:
           SecurityGroups:
             - !Ref AppSecurityGroup
           Subnets:
-            - !Ref PrivateAppSubnet1
-            - !Ref PrivateAppSubnet2
+            - !Ref WebFilesystemPrivateSubnet1
+            - !Ref WebFilesystemPrivateSubnet2
       LoadBalancers:
         - ContainerName: web
           ContainerPort: !Ref ContainerPort
