@@ -1,19 +1,23 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
-  ECS Fargate migration stack for a Django Docker application.
+Description: ECS Fargate web filesystem.
 
 Parameters:
+
+  ImageUri:
+    Type: String
+    Description: ECR image URI including digest.
+
   Environment:
     Type: String
     Default: dev
+    AllowedValues: [ "dev" ]
     Description: Environment name.
+
   ProjectName:
     Type: String
     Default: fons
     Description: Project/application name used in resource naming.
-  OrganisationName:
-    Type: String
-    Description: Organisation or local authority name.
+
   ApplicationName:
     Type: String
     Default: web-filesystem
@@ -23,143 +27,105 @@ Parameters:
 
   VpcId:
     Type: AWS::EC2::VPC::Id
-    Description: Existing LA VPC ID from the VPC stack
+    Description: LA VPC ID from the VPC stack
+
   WebFilesystemPublicSubnet1:
     Type: AWS::EC2::Subnet::Id
     Description: Web filesystem public subnet in AZ1 from the VPC stack.
+
   WebFilesystemPublicSubnet2:
     Type: AWS::EC2::Subnet::Id
     Description: Web filesystem public subnet in AZ2 from the VPC stack.
+
   WebFilesystemPrivateSubnet1:
     Type: AWS::EC2::Subnet::Id
     Description: Web filesystem private subnet in AZ1 from the VPC stack.
+
   WebFilesystemPrivateSubnet2:
     Type: AWS::EC2::Subnet::Id
     Description: Web filesystem private subnet in AZ2 from the VPC stack.
 
-  ContainerImage:
-    Type: String
-    Description: Full container image URI.
   ContainerPort:
     Type: Number
     Default: 8000
-    Description: Port exposed by the Django/gunicorn container.
+    Description: Port exposed by the container.
+
   ContainerCpu:
     Type: String
-    Default: "1024"
+    Default: "256"
     Description: ECS task CPU units.
+
   ContainerMemory:
     Type: String
-    Default: "2048"
+    Default: "512"
     Description: ECS task memory in MB.
+
   DesiredCount:
     Type: Number
     Default: 1
     Description: Number of ECS tasks to run.
 
-  AlbIdleTimeoutSeconds:
-    Type: Number
-    Default: 300
-    MinValue: 1
-    MaxValue: 4000
-    Description: ALB idle timeout.
-  CertificateArn:
-    Type: String
-    Description: ACM certificate ARN for HTTPS on the ALB.
   HealthCheckPath:
     Type: String
     Default: /health/
-    Description: Health check path served by Django.
+    Description: Health check path served by the container.
+
+  WebDatabaseSecretArn:
+    Type: String
+    Description: Aurora web database secret ARN.
+
   WebsiteUrl:
     Type: String
-    Description: Public website hostname. Do not include https://.
-  DataStoreBucketName:
-    Type: String
-    Description: Existing S3 bucket name used for uploaded and processed files.
+    Description: Public website hostname without https://.
 
-  DataStoreBucketArn:
-    Type: String
-    Description: Existing S3 bucket ARN used for uploaded and processed files.
-  CognitoUserPoolId:
-    Type: String
-    Description: Cognito user pool ID.
   CognitoAppClientId:
     Type: String
     Description: Cognito app client ID.
+
   CognitoAppDomain:
     Type: String
-    Description: Cognito app domain.
-  ExistingDjangoSecretKeySecretArn:
-    Type: String
-    Default: ""
-    Description: >
-      Optional existing Secrets Manager secret ARN containing the Django secret key.
-      Leave blank to create a generated secret.
+    Description: Cognito domain prefix.
 
-  DBName:
+  DataStoreStackName:
     Type: String
-    Default: postgres
-  DBUsername:
-    Type: String
-    Default: postgres
-  DBInstanceClass:
-    Type: String
-    Default: db.t4g.small
-    Description: RDS PostgreSQL instance class.
-  DBAllocatedStorage:
-    Type: Number
-    Default: 20
-  DBMaxAllocatedStorage:
-    Type: Number
-    Default: 100
-  DBEngineVersion:
-    Type: String
-    Default: "16.3"
-    Description: PostgreSQL engine version.
-  DBDeletionProtection:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
+    Description: CloudFormation stack containing the data store bucket.
 
   Debug:
     Type: String
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: Enable Django debug mode
-
-  UseSSO:
-    Type: String
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: Enable Cognito SSO for the Django application
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable Django debug mode.
 
   WriteOnlyView:
     Type: String
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: Enable write-only mode for the Django application
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable write-only mode for the Django application.
 
   MaxUploadSize:
     Type: Number
-    Description: Maximum upload size in bytes
-
-  PipelinesWithYearValidation:
-    Type: String
-    Description: Comma-separated pipelines requiring year validation
+    Default: 5242880
+    Description: Django in-memory upload threshold in bytes.
 
   AllowedDatasets:
     Type: String
-    Description: Comma-separated list of allowed datasets for upload
+    Default: "ssda903,cin,annex_a,pnw_census,sen2,csww,cans,school_census,placements_standard"
+    Description: Comma-separated list of allowed datasets.
 
-Conditions:
-  CreateDjangoSecretKey: !Equals [!Ref ExistingDjangoSecretKeySecretArn, ""]
-  IsProd: !Equals [!Ref Environment, prod]
-  EnableDBDeletionProtection: !Equals [!Ref DBDeletionProtection, "true"]
+  PipelinesWithYearValidation:
+    Type: String
+    Default: "sen2,csww,ssda903,cin"
+    Description: Comma-separated datasets requiring year validation.
+
+  DjangoEnv:
+    Type: String
+    Default: "production"
+    AllowedValues: ["production", "development"]
+    Description: Django settings environment.
+
+  SentryDsn:
+    Type: String
+    Description: Sentry project DSN.
 
 Resources:
   AlbSecurityGroup:
@@ -168,15 +134,10 @@ Resources:
       GroupDescription: Public ALB security group.
       VpcId: !Ref VpcId
       SecurityGroupIngress:
-        - Description: HTTP from internet, redirected to HTTPS.
+        - Description: HTTP from internet.
           IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - Description: HTTPS from internet.
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
           CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - Description: Allow outbound to app tasks.
@@ -198,31 +159,12 @@ Resources:
           ToPort: !Ref ContainerPort
           SourceSecurityGroupId: !Ref AlbSecurityGroup
       SecurityGroupEgress:
-        - Description: Outbound access for database, S3, ECR, Secrets Manager and external APIs.
+        - Description: Outbound access.
           IpProtocol: -1
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-${ApplicationName}-app-sg"
-
-  DatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: RDS PostgreSQL security group.
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - Description: PostgreSQL from ECS tasks only.
-          IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !Ref AppSecurityGroup
-      SecurityGroupEgress:
-        - Description: Allow outbound.
-          IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-${ApplicationName}-db-sg"
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -238,7 +180,7 @@ Resources:
         - !Ref WebFilesystemPublicSubnet2
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
-          Value: !Ref AlbIdleTimeoutSeconds
+          Value: "180"
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -278,111 +220,23 @@ Resources:
             Query: "#{query}"
             StatusCode: HTTP_301
 
-  HttpsListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
-      Certificates:
-        - CertificateArn: !Ref CertificateArn
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref AppTargetGroup
-
   DjangoSecretKeySecret:
     Type: AWS::SecretsManager::Secret
-    Condition: CreateDjangoSecretKey
     Properties:
       Name: !Sub "${ProjectName}/${Environment}/${ApplicationName}/django-secret-key"
-      Description: !Sub "Generated Django secret key for ${ProjectName} ${Environment}"
       GenerateSecretString:
         PasswordLength: 64
-        ExcludeCharacters: '"@/\'
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  DBCredentialsSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub "${ProjectName}/${Environment}/${ApplicationName}/database"
-      Description: !Sub "RDS PostgreSQL credentials for ${ProjectName} ${Environment}"
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username":"${DBUsername}"}'
-        GenerateStringKey: password
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  DatabaseSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: !Sub "DB subnet group for ${ProjectName} ${Environment} web app"
-      SubnetIds:
-        - !Ref WebFilesystemPrivateSubnet1
-        - !Ref WebFilesystemPrivateSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-${ApplicationName}-db-subnet-group"
-
-  DatabaseInstance:
-    Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
-    Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-${Environment}-${ApplicationName}-postgres"
-      Engine: postgres
-      EngineVersion: !Ref DBEngineVersion
-      DBInstanceClass: !Ref DBInstanceClass
-      AllocatedStorage: !Ref DBAllocatedStorage
-      MaxAllocatedStorage: !Ref DBMaxAllocatedStorage
-      StorageType: gp3
-      StorageEncrypted: true
-      DBName: !Ref DBName
-      Port: "5432"
-      MasterUsername: !Sub "{{resolve:secretsmanager:${DBCredentialsSecret}:SecretString:username}}"
-      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBCredentialsSecret}:SecretString:password}}"
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DatabaseSubnetGroup
-      PubliclyAccessible: false
-      BackupRetentionPeriod: !If [IsProd, 7, 1]
-      DeletionProtection: !If [EnableDBDeletionProtection, true, false]
-      AutoMinorVersionUpgrade: true
-      CopyTagsToSnapshot: true
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Organisation
-          Value: !Ref OrganisationName
-
-  DatabaseSecretAttachment:
-    Type: AWS::SecretsManager::SecretTargetAttachment
-    Properties:
-      SecretId: !Ref DBCredentialsSecret
-      TargetId: !Ref DatabaseInstance
-      TargetType: AWS::RDS::DBInstance
-
+        
   AppLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/ecs/${ProjectName}/${Environment}/${ApplicationName}"
-      RetentionInDays: !If [IsProd, 90, 30]
+      RetentionInDays: 7
 
   AppTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      Description: ECS task execution role for image pulls, logs and secret injection.
+      Description: ECS task execution role for image pulls and logs.
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -393,61 +247,22 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
       Policies:
-        - PolicyName: ReadContainerSecrets
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Sid: ReadSecretsForTaskStartup
-                Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource:
-                  - !Ref DBCredentialsSecret
-                  - !If
-                    - CreateDjangoSecretKey
-                    - !Ref DjangoSecretKeySecret
-                    - !Ref ExistingDjangoSecretKeySecretArn
-              - Sid: PullDockerImage
-                Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: "arn:aws:secretsmanager:eu-west-2:260477567664:secret:dockerhub-sysadmin-credentials-5Lb3FI"
-              - Sid: DecryptKMSKey
-                Effect: Allow
-                Action:
-                  - kms:Decrypt
-                Resource: "arn:aws:kms:eu-west-2:260477567664:key/69dd8f98-e08c-4410-840f-ab1ea78ef2b2"
-
-  AppTaskRole:
-    Type: AWS::IAM::Role
-    Properties:
-      Description: Application task role used by Django at runtime.
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: AppS3Access
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Sid: ListDataBucket
-                Effect: Allow
-                Action:
-                  - s3:ListBucket
-                Resource:
-                  - !Ref DataStoreBucketArn
-              - Sid: ReadWriteDataObjects
-                Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                  - s3:DeleteObject
-                Resource:
-                  - !Sub "${DataStoreBucketArn}/*"
+          - PolicyName: WebDatabaseSecret
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - secretsmanager:GetSecretValue
+                  Resource: !Ref WebDatabaseSecretArn
+          - PolicyName: DjangoSecretKey
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - secretsmanager:GetSecretValue
+                  Resource: !Ref DjangoSecretKeySecret
 
   EcsCluster:
     Type: AWS::ECS::Cluster
@@ -471,80 +286,83 @@ Resources:
       NetworkMode: awsvpc
       Cpu: !Ref ContainerCpu
       Memory: !Ref ContainerMemory
+      TaskRoleArn: arn:aws:iam::597424084090:role/Fons-Dev-LA-Web-S3-Access-AppTaskRole-p257vz1BvvPV
       ExecutionRoleArn: !GetAtt AppTaskExecutionRole.Arn
-      TaskRoleArn: !GetAtt AppTaskRole.Arn
       ContainerDefinitions:
         - Name: web
-          Image: !Ref ContainerImage
+          Image: !Ref ImageUri
           Essential: true
           PortMappings:
             - ContainerPort: !Ref ContainerPort
               Protocol: tcp
           Environment:
+            - Name: PGSSLMODE
+              Value: require
+            - Name: GUNICORN_CMD_ARGS
+              Value: "--timeout 120"
+            - Name: LOAD_BALANCER_SSL
+              Value: "true"
+            - Name: ALLOWED_HOSTS
+              Value: !Ref WebsiteUrl
+            - Name: TRUSTED_ORIGINS
+              Value: !Sub "https://${WebsiteUrl}"
+            - Name: USE_SSO
+              Value: "true"
             - Name: AWS_REGION
               Value: !Ref AWS::Region
-            - Name: ENVIRONMENT
-              Value: !Ref Environment
-            - Name: PROJECT_NAME
-              Value: !Ref ProjectName
-            - Name: WEBSITE_URL
-              Value: !Ref WebsiteUrl
-            - Name: ALLOWED_DATASETS
-              Value: !Ref AllowedDatasets
-            - Name: USE_SSO
-              Value: !Ref UseSSO
+            - Name: AWS_COGNITO_DOMAIN
+              Value: !Ref CognitoAppDomain
+            - Name: AWS_COGNITO_APP_CLIENT_ID
+              Value: !Ref CognitoAppClientId
+            - Name: SF_FS_BACKEND_URL
+              Value:
+                Fn::Join:
+                  - ""
+                  - - "s3://"
+                    - Fn::GetStackOutput:
+                        StackName: !Ref DataStoreStackName
+                        OutputName: IngressBucketName
+                    - "/"
+            - Name: DEBUG
+              Value: !Ref Debug
             - Name: WRITE_ONLY_VIEW
               Value: !Ref WriteOnlyView
             - Name: MAX_UPLOAD_SIZE
               Value: !Ref MaxUploadSize
+            - Name: ALLOWED_DATASETS
+              Value: !Ref AllowedDatasets
             - Name: PIPELINES_WITH_YEAR_VALIDATION
               Value: !Ref PipelinesWithYearValidation
-            - Name: DEBUG
-              Value: !Ref Debug
-            - Name: ALLOWED_HOSTS
-              Value: !Sub "${WebsiteUrl},${ApplicationLoadBalancer.DNSName}"
-            - Name: TRUSTED_ORIGINS
-              Value: !Sub "https://${WebsiteUrl},https://${ApplicationLoadBalancer.DNSName}"
-            - Name: AWS_COGNITO_USER_POOL_ID
-              Value: !Ref CognitoUserPoolId
-            - Name: AWS_COGNITO_APP_CLIENT_ID
-              Value: !Ref CognitoAppClientId
-            - Name: AWS_COGNITO_DOMAIN
-              Value: !Ref CognitoAppDomain
-            - Name: SF_FS_BACKEND_URL
-              Value: !Sub "s3://${DataStoreBucketName}"
-            - Name: DATA_STORE_BUCKET_NAME
-              Value: !Ref DataStoreBucketName
-            - Name: DB_HOST
-              Value: !GetAtt DatabaseInstance.Endpoint.Address
-            - Name: DB_PORT
-              Value: "5432"
-            - Name: DB_NAME
-              Value: !Ref DBName
-            - Name: "DJANGO_ENV"
+            - Name: DJANGO_ENV
+              Value: !Ref DjangoEnv
+            - Name: SENTRY_ENVIRONMENT
               Value: !Ref Environment
+            - Name: SENTRY_DSN
+              Value: !Ref SentryDsn
           Secrets:
-            - Name: DJANGO_SECRET_KEY
-              ValueFrom: !If
-                - CreateDjangoSecretKey
-                - !Ref DjangoSecretKeySecret
-                - !Ref ExistingDjangoSecretKeySecretArn
+            - Name: DB_HOST
+              ValueFrom: !Sub "${WebDatabaseSecretArn}:host::"
+            - Name: DB_PORT
+              ValueFrom: !Sub "${WebDatabaseSecretArn}:port::"
+            - Name: DB_NAME
+              ValueFrom: !Sub "${WebDatabaseSecretArn}:dbname::"
             - Name: DB_USERNAME
-              ValueFrom: !Sub "${DBCredentialsSecret}:username::"
+              ValueFrom: !Sub "${WebDatabaseSecretArn}:username::"
             - Name: DB_PASSWORD
-              ValueFrom: !Sub "${DBCredentialsSecret}:password::"
+              ValueFrom: !Sub "${WebDatabaseSecretArn}:password::"
+            - Name: DJANGO_SECRET_KEY
+              ValueFrom: !Ref DjangoSecretKeySecret
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: !Ref AppLogGroup
               awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: django
+              awslogs-stream-prefix: web-filesystem
 
   AppService:
     Type: AWS::ECS::Service
     DependsOn:
-      - HttpsListener
-      - DatabaseInstance
+      - HttpListener
     Properties:
       ServiceName: !Sub "${ProjectName}-${Environment}-${ApplicationName}"
       Cluster: !Ref EcsCluster
@@ -552,7 +370,7 @@ Resources:
       LaunchType: FARGATE
       PlatformVersion: LATEST
       DesiredCount: !Ref DesiredCount
-      EnableExecuteCommand: true
+      HealthCheckGracePeriodSeconds: 60
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: DISABLED
@@ -572,45 +390,13 @@ Resources:
           Value: !Ref Environment
 
 Outputs:
-  AlbDnsName:
-    Description: ALB DNS name.
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-
-  AlbHostedZoneId:
-    Description: ALB hosted zone ID, useful for Route 53 alias records.
-    Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
-
+  WebsiteUrl:
+    Value: !Sub "https://${WebsiteUrl}"
   EcsClusterName:
-    Description: ECS cluster name.
     Value: !Ref EcsCluster
-
   EcsServiceName:
-    Description: ECS service name.
     Value: !GetAtt AppService.Name
-
   TaskDefinitionArn:
-    Description: ECS task definition ARN.
     Value: !Ref AppTaskDefinition
-
-  DatabaseEndpointAddress:
-    Description: RDS PostgreSQL endpoint address.
-    Value: !GetAtt DatabaseInstance.Endpoint.Address
-
-  DatabaseEndpointPort:
-    Description: RDS PostgreSQL endpoint port.
-    Value: !GetAtt DatabaseInstance.Endpoint.Port
-
-  DatabaseCredentialsSecretArn:
-    Description: Secrets Manager ARN for database credentials.
-    Value: !Ref DBCredentialsSecret
-
-  DjangoSecretKeySecretArn:
-    Description: Secrets Manager ARN for Django secret key.
-    Value: !If
-      - CreateDjangoSecretKey
-      - !Ref DjangoSecretKeySecret
-      - !Ref ExistingDjangoSecretKeySecretArn
-
   CloudWatchLogGroup:
-    Description: CloudWatch log group for the Django container.
     Value: !Ref AppLogGroup
