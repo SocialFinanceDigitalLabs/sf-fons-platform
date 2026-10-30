@@ -678,7 +678,7 @@ Resources:
     DependsOn: VPC
     Properties:
       GroupName: !Sub "dagsteroneoff-sg-${Environment}"
-      GroupDescription: "Security Group for the Lambda which triggers a Dagster job"
+      GroupDescription: "Security Group for the Lambda which triggers on Dagster job"
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
