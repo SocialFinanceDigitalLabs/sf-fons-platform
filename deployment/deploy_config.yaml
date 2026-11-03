@@ -1,0 +1,41 @@
+environments:
+  la-staging:
+    lambda_stack: Fons-Staging-Platform-Dagster-Scaling
+    lambda_bucket_name: fons-lambda-code-la-staging
+    dagster_stack:
+  org-staging:
+    lambda_stack:
+    lambda_bucket_name:
+    dagster_stack:
+  london-la-staging:
+    lambda_stack:
+    lambda_bucket_name:
+    dagster_stack:
+  london-org-staging:
+    lambda_stack:
+    lambda_bucket_name:
+    dagster_stack:
+  eoe-la-staging:
+    lambda_stack:
+    storalambda_bucket_namege_stack:
+    dagster_stack:
+  eoe-org-staging:
+    lambda_stack:
+    lambda_bucket_name:
+    dagster_stack:
+  gmca-la-staging:
+    lambda_stack:
+    lambda_bucket_name:
+    dagster_stack:
+  gmca-org-staging:
+    lambda_stack:
+    lambda_bucket_name:
+    dagster_stack:
+  se-la-staging:
+    lambda_stack:
+    lambda_bucket_name:
+    dagster_stack:
+  se-org-staging:
+    lambda_stack:
+    lambda_bucket_name:
+    dagster_stack:
