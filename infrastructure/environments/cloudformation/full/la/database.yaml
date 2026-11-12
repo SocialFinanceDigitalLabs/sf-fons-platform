@@ -1,0 +1,115 @@
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  This template manages the Aurora database cluster, instance, and database secret.
+
+Parameters:
+  # Project-level Parameters
+  ProjectName:
+    Type: String
+    Default: Dagster
+    Description: Name of the la. Used to name things like database, etc.
+
+  # Environment Parameters
+  Environment:
+    Type: String
+    Description: The name for the environment. Expected values are dev, staging, prod
+
+  # Database Parameters
+  DatabaseBackupRetentionPeriod:
+    Type: String
+    Default: 7
+    Description: Amount (in days) to keep database versions on disk
+  DBEngine:
+    Type: String
+    Default: aurora-postgresql
+    Description: Type of database to run. Suggested postgres or aurora-postgresql
+  DBName:
+    Type: String
+    Default: postgres
+    Description: The name to be used for the database
+  DBUsername:
+    Type: String
+    Default: postgres
+    Description: Username to use with the database
+  DBMinCapacity:
+    Type: String
+    Default: 0.5
+    Description: Minimum capacity is 0.5
+  DBMaxCapacity:
+    Type: String
+    Default: 1
+    Description: Minimum capacity is 0.5
+
+  # Networking Parameters
+  DatabaseSubnetGroup:
+    Type: String
+    Description: Database Subnet Group ID
+  DatabaseSecurityGroup:
+    Type: String
+    Description: Security Group ARN to use for the Database
+
+Resources:
+  # Database Definition
+  DagsterDatabaseCluster:
+    Type: 'AWS::RDS::DBCluster'
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      DeletionProtection: true
+      Engine: !Ref DBEngine
+      DBClusterIdentifier: !Ref DBName
+      BackupRetentionPeriod: !Ref DatabaseBackupRetentionPeriod
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPassword}:SecretString}}'
+      StorageEncrypted: true
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: !Ref DBMinCapacity
+        MaxCapacity: !Ref DBMaxCapacity
+      VpcSecurityGroupIds:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  DagsterDatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Engine: !Ref DBEngine
+      DBInstanceClass: db.serverless
+      DBClusterIdentifier: !Ref DagsterDatabaseCluster
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  DBPassword:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: DBPassword
+      GenerateSecretString:
+        ExcludeLowercase: false
+        ExcludeNumbers: false
+        ExcludePunctuation: false
+        ExcludeUppercase: false
+        IncludeSpace: false
+        PasswordLength: 20
+        RequireEachIncludedType: true
+        ExcludeCharacters: "\"'@/\\"
+
+Outputs:
+  DatabaseEndpointAddress:
+    Description: Endpoint address for the Aurora database cluster
+    Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
+  DatabaseEndpointPort:
+    Description: Port for the Aurora database cluster
+    Value: !GetAtt DagsterDatabaseCluster.Endpoint.Port
+  DBPasswordArn:
+    Description: ARN of the database master password secret
+    Value: !Ref DBPassword

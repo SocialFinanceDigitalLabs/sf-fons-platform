@@ -345,25 +345,6 @@ Resources:
         - !Ref CodeServerSecurityGroup
       PrivateDnsEnabled: true
 
-  PrivateServiceDiscoveryNamespace:
-    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
-    Properties:
-      Name: my-namespace.local
-      Vpc: !Ref VPC
-
-  DagsterWebserverDiscoveryService:
-    Type: AWS::ServiceDiscovery::Service
-    Properties:
-      Name: dagster-webserver
-      NamespaceId: !Ref PrivateServiceDiscoveryNamespace
-      DnsConfig:
-        DnsRecords:
-          - Type: A
-            TTL: 10
-        RoutingPolicy: WEIGHTED
-      HealthCheckCustomConfig:
-        FailureThreshold: 1
-
   DaemonSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     DependsOn: VPC
@@ -520,11 +501,3 @@ Outputs:
   DatabaseSubnetGroup:
     Description: Subnet Group for the database
     Value: !Ref DatabaseSubnetGroup
-
-  PrivateServiceDiscoveryNamespace:
-    Description: Name of the Namespace for private service discovery. To be used for Service Connect for ECS
-    Value: !GetAtt PrivateServiceDiscoveryNamespace.Id
-
-  DagsterWebserverDiscoveryServiceArn:
-    Description: Service Discovery Service for the Dagster Webserver. To be used for Lambda to find the webserver in ECS
-    Value: !GetAtt DagsterWebserverDiscoveryService.Arn

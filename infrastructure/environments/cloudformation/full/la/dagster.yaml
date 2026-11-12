@@ -21,7 +21,14 @@ Parameters:
   # Environment Parameters
   Environment:
     Type: String
-    Description: The name for the environment. Expected values are dev, staging, prod
+    Default: ""
+    AllowedValues:
+      - ""
+      - dev
+      - staging
+      - prod
+      - test
+    Description: The name for the environment. 
 
   # ECS Parameters
   DaemonCpu:
@@ -135,26 +142,6 @@ Parameters:
     Description: Version identifier for the hashing key
 
   # Database Parameters
-  DBStorageSize:
-    Type: Number
-    Default: 20
-    Description: How many GB the db should be allocated for storage
-  DBInstanceClass:
-    Type: String
-    Default: db.serverless
-    Description: Type of resources for the database to use. See https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Concepts.DBInstanceClass.html#Concepts.DBInstanceClass.Types.serverless-v2
-  DatabaseBackupRetentionPeriod:
-    Type: String
-    Default: 7
-    Description: Amount (in days) to keep database versions on disk
-  DBEngine:
-    Type: String
-    Default: aurora-postgresql
-    Description: Type of database to run. Suggested postgres or aurora-postgresql
-  DBStorageType:
-    Type: String
-    Default: gp2
-    Description: Type of storage to run the database on (standard or gp2 are the usual options)
   DBName:
     Type: String
     Default: postgres
@@ -163,23 +150,18 @@ Parameters:
     Type: String
     Default: 3306
     Description: The port to use to connect to the database
+  DatabaseEndpoint:
+    Type: String
+    Description: Endpoint address of the existing Aurora database cluster
   DBUsername:
     Type: String
     Default: postgres
     Description: Username to use with the database
-  DBMinCapacity:
+  DBPasswordArn:
     Type: String
-    Default: 0.5
-    Description: Minimum capacity is 0.5
-  DBMaxCapacity:
-    Type: String
-    Default: 1
-    Description: Minimum capacity is 0.5
+    Description: ARN ref to the Password to use with the database    
 
   # Networking Parameters
-  DatabaseSubnetGroup:
-    Type: String
-    Description: Database Subnet Group ID
   PrivateSubnet1:
     Type: String
     Description: ARN for private subnet 1
@@ -201,38 +183,56 @@ Parameters:
   CodeServerSecurityGroup:
     Type: String
     Description: Security Group ARN to use for the Code Servers
-  DatabaseSecurityGroup:
+  ServiceDiscoveryNamespaceArn:
     Type: String
-    Description: Security Group ARN to use for the Database
-  PrivateServiceDiscoveryNamespace:
-    Type: String
-    Description: Namespace for private network.
-    Default: my-namespace.local
-  DagsterWebserverDiscoveryServiceArn:
-    Type: String
-    Description: ARN for the Dagster Webserver Service Discovery Service
+    Description: ARN of the Cloud Map namespace
 
 Conditions:
   IsProd: !Equals [!Ref Environment, "prod"]
+  HasEnvironment: !Not [!Equals [!Ref Environment, ""]]
 
 Resources:
+
+  # Discovery Service link for Dagster Web Server
+  DagsterWebserverDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: dagster-webserver
+      NamespaceId: !Ref ServiceDiscoveryNamespaceArn 
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+        RoutingPolicy: WEIGHTED
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
   # Logging Configuration
   DagitLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "${ProjectName}-${OrganisationName}-Dagit-LogGroup-${Environment}"
+      LogGroupName: !If
+        - HasEnvironment
+        - !Sub "${ProjectName}-${OrganisationName}-Dagit-LogGroup-${Environment}"
+        - !Sub "${ProjectName}-${OrganisationName}-Dagit-LogGroup"
       RetentionInDays: !Ref LogRetentionTimeDays
 
   CodeServerLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "${ProjectName}-${OrganisationName}-CodeServer-LogGroup-${Environment}"
+      LogGroupName: !If
+      - HasEnvironment
+      - !Sub "${ProjectName}-${OrganisationName}-CodeServer-LogGroup-${Environment}"
+      - !Sub "${ProjectName}-${OrganisationName}-CodeServer-LogGroup"
       RetentionInDays: !Ref LogRetentionTimeDays
 
   DaemonLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "${ProjectName}-${OrganisationName}-Daemon-LogGroup-${Environment}"
+      LogGroupName: !If
+        - HasEnvironment
+        - !Sub "${ProjectName}-${OrganisationName}-Daemon-LogGroup-${Environment}"
+        - !Sub "${ProjectName}-${OrganisationName}-Daemon-LogGroup"
       RetentionInDays: !Ref LogRetentionTimeDays
 
   # ECS Definition
@@ -263,6 +263,15 @@ Resources:
                   - "ecs:DescribeTaskDefinition"
                 Resource:
                   - "*"
+
+        - PolicyName: ReadDatabasePassword
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DBPasswordArn
       ManagedPolicyArns: # These need to be peared down for security reasons. What is necessary?
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
@@ -343,6 +352,15 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSSMFullAccess
         - arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      Policies:
+        - PolicyName: ReadDatabasePassword
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DBPasswordArn
 
   DaemonTaskRole:
     Type: AWS::IAM::Role
@@ -406,7 +424,10 @@ Resources:
   CodeServerTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ProjectName}-${RegionConfig}-CodeServerTaskExecutionRole"
+      RoleName: !If
+        - HasEnvironment
+        - !Sub "${ProjectName}-${RegionConfig}-${Environment}-CodeServerTaskExecutionRole"
+        - !Sub "${ProjectName}-${RegionConfig}-CodeServerTaskExecutionRole"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -442,7 +463,15 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Resource:
                   - !Ref HashSecretArn
-
+        - PolicyName: ReadDatabasePassword
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DBPasswordArn
+                
   CodeServerTaskRole:
     Type: AWS::IAM::Role
     Properties:
@@ -473,7 +502,6 @@ Resources:
   DagsterCluster:
     Type: AWS::ECS::Cluster
     DependsOn:
-      - DagsterDatabaseCluster
       - CodeServerTaskExecutionRole
       - DaemonTaskExecutionRole
       - DagitTaskExecutionRole
@@ -493,9 +521,11 @@ Resources:
       - DaemonTaskExecutionRole
       - DaemonTaskRole
       - DaemonLogGroup
-      - DagsterDatabaseCluster
     Properties:
-      Family: DagsterDaemonTask
+      Family: !If
+        - HasEnvironment
+        - !Sub "DagsterDaemonTask-${Environment}"
+        - "DagsterDaemonTask"
       ExecutionRoleArn: !GetAtt DaemonTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt DaemonTaskRole.Arn
       NetworkMode: awsvpc
@@ -524,11 +554,9 @@ Resources:
             - Name: DAGSTER_HOME
               Value: "/opt/dagster/dagster_home/"
             - Name: DAGSTER_POSTGRES_HOST
-              Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
+              Value: !Ref DatabaseEndpoint
             - Name: DAGSTER_POSTGRES_USER
               Value: !Ref DBUsername
-            - Name: DAGSTER_POSTGRES_PASSWORD
-              Value: !Ref DBPassword
             - Name: DAGSTER_POSTGRES_DB
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
@@ -539,6 +567,9 @@ Resources:
               Value: !GetAtt CodeServerTaskDefinition.TaskDefinitionArn
             - Name: DAGSTER_GRPC_TIMEOUT_SECONDS
               Value: !Ref DagsterGRPCTimeout
+          Secrets:
+            - Name: DAGSTER_POSTGRES_PASSWORD
+              ValueFrom: !Ref DBPasswordArn
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -550,10 +581,12 @@ Resources:
       - DagitTaskExecutionRole
       - DagitTaskRole
       - DagitLogGroup
-      - DagsterDatabaseCluster
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: DagitTask
+      Family: !If
+        - HasEnvironment
+        - !Sub "DagitTask-${Environment}"
+        - "DagitTask"
       ExecutionRoleArn: !GetAtt DagitTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt DagitTaskRole.Arn
       NetworkMode: awsvpc
@@ -586,11 +619,9 @@ Resources:
               awslogs-stream-prefix: "dagit"
           Environment:
             - Name: DAGSTER_POSTGRES_HOST
-              Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
+              Value: !Ref DatabaseEndpoint
             - Name: DAGSTER_POSTGRES_USER
               Value: !Ref DBUsername
-            - Name: DAGSTER_POSTGRES_PASSWORD
-              Value: !Ref DBPassword
             - Name: DAGSTER_POSTGRES_DB
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
@@ -601,6 +632,9 @@ Resources:
               Value: "utf8.env"
             - Name: DAGSTER_GRPC_TIMEOUT_SECONDS
               Value: !Ref DagsterGRPCTimeout
+          Secrets:
+            - Name: DAGSTER_POSTGRES_PASSWORD
+              ValueFrom: !Ref DBPasswordArn
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -613,9 +647,11 @@ Resources:
       - CodeServerTaskExecutionRole
       - CodeServerTaskRole
       - CodeServerLogGroup
-      - DagsterDatabaseCluster
     Properties:
-      Family: CodeServerTask
+      Family: !If
+        - HasEnvironment
+        - !Sub "CodeServerTask-${Environment}"
+        - "CodeServerTask"
       ExecutionRoleArn: !GetAtt CodeServerTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt CodeServerTaskRole.Arn
       NetworkMode: awsvpc
@@ -643,6 +679,8 @@ Resources:
           Secrets:
             - Name: HASH_SECRET_KEY
               ValueFrom: !Ref HashSecretArn
+            - Name: DAGSTER_POSTGRES_PASSWORD
+              ValueFrom: !Ref DBPasswordArn
           Environment:
             - Name: CODE_FOLDER
               Value: !Ref CodeServerPipelineFolder
@@ -651,11 +689,9 @@ Resources:
             - Name: PYTHONLEGACYWINDOWSSTDIO
               Value: "utf8.env"
             - Name: DAGSTER_POSTGRES_HOST
-              Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
+              Value: !Ref DatabaseEndpoint
             - Name: DAGSTER_POSTGRES_USER
               Value: !Ref DBUsername
-            - Name: DAGSTER_POSTGRES_PASSWORD
-              Value: !Ref DBPassword
             - Name: DAGSTER_POSTGRES_DB
               Value: !Ref DBName
             - Name: DAGSTER_POSTGRES_PORT
@@ -711,7 +747,7 @@ Resources:
             - !Ref DaemonSecurityGroup
       ServiceConnectConfiguration:
         Enabled: true
-        Namespace: !Ref PrivateServiceDiscoveryNamespace
+        Namespace: !Ref ServiceDiscoveryNamespaceArn
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -734,11 +770,11 @@ Resources:
           SecurityGroups:
            - !Ref DagitSecurityGroup
       ServiceRegistries:
-        - RegistryArn: !Ref DagsterWebserverDiscoveryServiceArn
-          ContainerName: dagster-webserver
+        - RegistryArn: !GetAtt DagsterWebserverDiscoveryService.Arn
+          ContainerName: dagit
       ServiceConnectConfiguration:
         Enabled: true
-        Namespace: !Ref PrivateServiceDiscoveryNamespace
+        Namespace: !Ref ServiceDiscoveryNamespaceArn
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -762,11 +798,14 @@ Resources:
             - !Ref CodeServerSecurityGroup
       ServiceConnectConfiguration:
         Enabled: true
-        Namespace: !Ref PrivateServiceDiscoveryNamespace
+        Namespace: !Ref ServiceDiscoveryNamespaceArn
         LogConfiguration:
           LogDriver: awslogs
           Options:
-            awslogs-group: "dagster-daemon-code-service-map"
+            awslogs-group: !If
+              - HasEnvironment
+              - !Sub "dagster-daemon-code-service-map-${Environment}"
+              - "dagster-daemon-code-service-map"
             awslogs-region: !Ref AWS::Region
             awslogs-create-group: true
             awslogs-stream-prefix: "dagster"
@@ -782,60 +821,10 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-
-  # Database Definition
-  DagsterDatabaseCluster:
-    Type: 'AWS::RDS::DBCluster'
-    DeletionPolicy: Delete
-    Properties:
-      Engine: !Ref DBEngine
-      DBClusterIdentifier: !Ref DBName
-      BackupRetentionPeriod: !Ref DatabaseBackupRetentionPeriod
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
-      StorageEncrypted: true
-      ServerlessV2ScalingConfiguration:
-        MinCapacity: !Ref DBMinCapacity
-        MaxCapacity: !Ref DBMaxCapacity
-      VpcSecurityGroupIds:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DatabaseSubnetGroup
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  DagsterDatabaseInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      Engine: !Ref DBEngine
-      DBInstanceClass: db.serverless
-      DBClusterIdentifier: !Ref DagsterDatabaseCluster
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-
-  DBPassword:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: DBPassword
-      GenerateSecretString:
-        ExcludeLowercase: false
-        ExcludeNumbers: false
-        ExcludePunctuation: false
-        ExcludeUppercase: false
-        IncludeSpace: false
-        PasswordLength: 20
-        RequireEachIncludedType: true
-        ExcludeCharacters: "\"'@/\\"
-
 Outputs:
   DatabaseEndpointAddress:
     Description: Endpoint Address for the Database
-    Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
+    Value: !Ref DatabaseEndpoint
   ECSClusterName:
     Description: ARN for the ECS Cluster running dagster
     Value: !Ref DagsterCluster
@@ -857,3 +846,6 @@ Outputs:
   CodeServerServiceARN:
     Description: ARN for the Dagit Service
     Value: !Ref CodeServerService
+  DagsterWebserverDiscoveryServiceArn:
+    Description: Service Discovery Service for the Dagster Webserver
+    Value: !GetAtt DagsterWebserverDiscoveryService.Arn

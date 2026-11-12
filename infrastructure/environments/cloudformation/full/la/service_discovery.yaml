@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  Environment: 
+    Type: String
+    Default: ""
+    AllowedValues:
+      - ""
+      - dev
+      - staging
+      - prod
+      - test
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+
+Conditions:
+  HasEnvironment: !Not [!Equals [!Ref Environment, ""]]
+
+Resources:
+  PrivateServiceDiscoveryNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: !If
+        - HasEnvironment
+        - !Sub "my-namespace-${Environment}.local"
+        - "my-namespace.local"
+      Vpc: !Ref VpcId
+
+Outputs:
+  ServiceDiscoveryNamespaceArn:
+    Description: ARN of the Cloud Map namespace
+    Value: !GetAtt PrivateServiceDiscoveryNamespace.Arn
+  ServiceDiscoveryNamespaceName:
+    Description: DNS name of the Cloud Map namespace
+    Value: !If
+      - HasEnvironment
+      - !Sub "my-namespace-${Environment}.local"
+      - "my-namespace.local"
