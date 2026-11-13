@@ -287,6 +287,11 @@ Resources:
               - !Ref WorkspaceBucket
               - !Ref SharedBucket
               - !Ref ExternalDataBucket
+          - Effect: Allow
+            Sid: AllowECRImageLayers
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: arn:aws:s3:::prod-eu-west-2-starport-layer-bucket/*
       RouteTableIds:
         - !Ref PrivateRouteTable1
         - !Ref PrivateRouteTable2
