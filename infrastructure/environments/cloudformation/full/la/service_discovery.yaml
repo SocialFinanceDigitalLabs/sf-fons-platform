@@ -20,6 +20,8 @@ Conditions:
 Resources:
   PrivateServiceDiscoveryNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Name: !If
         - HasEnvironment

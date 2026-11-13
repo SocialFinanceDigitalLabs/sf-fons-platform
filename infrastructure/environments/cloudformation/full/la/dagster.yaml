@@ -4,6 +4,7 @@ Description: |
   A dagit instance (used for managing job runs), A daemon instance (used for sensing and scheduling), and a
   code server (used for running pipelines).
 Parameters:
+
   # Project-level Parameters
   ProjectName:
     Type: String
@@ -162,6 +163,12 @@ Parameters:
     Description: ARN ref to the Password to use with the database    
 
   # Networking Parameters
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID for the Dagster resources
+  DatabaseSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group ID for the shared Aurora database
   PrivateSubnet1:
     Type: String
     Description: ARN for private subnet 1
@@ -174,15 +181,6 @@ Parameters:
   PublicSubnet2:
     Type: String
     Description: ARN for public subnet 2
-  DaemonSecurityGroup:
-    Type: String
-    Description: Security Group ARN to use for the Daemon
-  DagitSecurityGroup:
-    Type: String
-    Description: Security Group ARN to use for the Dagit Interface
-  CodeServerSecurityGroup:
-    Type: String
-    Description: Security Group ARN to use for the Code Servers
   ServiceDiscoveryNamespaceArn:
     Type: String
     Description: ARN of the Cloud Map namespace
@@ -196,6 +194,8 @@ Resources:
   # Discovery Service link for Dagster Web Server
   DagsterWebserverDiscoveryService:
     Type: AWS::ServiceDiscovery::Service
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Name: dagster-webserver
       NamespaceId: !Ref ServiceDiscoveryNamespaceArn 
@@ -206,6 +206,84 @@ Resources:
         RoutingPolicy: WEIGHTED
       HealthCheckCustomConfig:
         FailureThreshold: 1
+
+  # Security Groups - Dagster Daemon 
+  DaemonSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !If
+        - HasEnvironment
+        - !Sub "daemon-sg-${Environment}"
+        - "daemon-sg"
+      GroupDescription: "Security group for the dagster daemon"
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
+  # Security Groups - Dagster CodeServer 
+  CodeServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !If
+        - HasEnvironment
+        - !Sub "codeserver-sg-${Environment}"
+        - "codeserver-sg"
+      GroupDescription: "Security Group for the Code Server"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 4000
+          ToPort: 4000
+          SourceSecurityGroupId: !Ref DaemonSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 4000
+          ToPort: 4000
+          SourceSecurityGroupId: !Ref DagitSecurityGroup
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
+  # Security Groups - Dagit CodeServer 
+  DagitSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GrouGroupName: !If
+        - HasEnvironment
+        - !Sub "dagit-sg-${Environment}"
+        - "dagit-sg"
+      GroupDescription: "Security Group for the Dagit Interface"
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
+  DaemonDatabaseIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroupId
+      IpProtocol: tcp
+      FromPort: !Ref DBPort
+      ToPort: !Ref DBPort
+      SourceSecurityGroupId: !Ref DaemonSecurityGroup
+
+  DagitDatabaseIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroupId
+      IpProtocol: tcp
+      FromPort: !Ref DBPort
+      ToPort: !Ref DBPort
+      SourceSecurityGroupId: !Ref DagitSecurityGroup
+
+  CodeServerDatabaseIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroupId
+      IpProtocol: tcp
+      FromPort: !Ref DBPort
+      ToPort: !Ref DBPort
+      SourceSecurityGroupId: !Ref CodeServerSecurityGroup
 
   # Logging Configuration
   DagitLogGroup:
@@ -609,7 +687,7 @@ Resources:
           PortMappings:
             - ContainerPort: 3000
               Protocol: tcp
-              Name: 3000
+              Name: "3000"
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -668,7 +746,7 @@ Resources:
           PortMappings:
             - ContainerPort: 4000
               Protocol: tcp
-              Name: 4000
+              Name: "4000"
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -811,7 +889,7 @@ Resources:
             awslogs-stream-prefix: "dagster"
         Services:
           - DiscoveryName: user_code
-            PortName: 4000
+            PortName: "4000"
             ClientAliases:
               - DnsName: user_code
                 Port: 4000
@@ -849,3 +927,6 @@ Outputs:
   DagsterWebserverDiscoveryServiceArn:
     Description: Service Discovery Service for the Dagster Webserver
     Value: !GetAtt DagsterWebserverDiscoveryService.Arn
+  DagitSecurityGroupId:
+    Description: Security group ID for the Dagster webserver
+    Value: !Ref DagitSecurityGroup

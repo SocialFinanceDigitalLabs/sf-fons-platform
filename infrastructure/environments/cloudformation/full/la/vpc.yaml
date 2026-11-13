@@ -86,6 +86,21 @@ Resources:
         - Key: Name
           Value: !Ref Environment
 
+  VpcEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for VPC interface endpoints"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref PrivateSubnet1CIDR
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref PrivateSubnet2CIDR
+
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -154,30 +169,6 @@ Resources:
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
-
-  NatGatewayDatabaseEIP1:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
-
-  NatGatewayDatabaseEIP2:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
-
-  NatGatewayDatabase1:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatGatewayDatabaseEIP1.AllocationId
-      SubnetId: !Ref DatabaseSubnet1
-
-  NatGatewayDatabase2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatGatewayDatabaseEIP2.AllocationId
-      SubnetId: !Ref DatabaseSubnet2
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -326,9 +317,7 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       SecurityGroupIds:
-        - !Ref DaemonSecurityGroup
-        - !Ref CodeServerSecurityGroup
-        - !Ref DatabaseSecurityGroup
+        - !Ref VpcEndpointSecurityGroup
       PrivateDnsEnabled: true
 
   S3InterfacePrivateEndpoint:
@@ -341,91 +330,8 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       SecurityGroupIds:
-        - !Ref DaemonSecurityGroup
-        - !Ref CodeServerSecurityGroup
+        - !Ref VpcEndpointSecurityGroup
       PrivateDnsEnabled: true
-
-  DaemonSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    DependsOn: VPC
-    Properties:
-      GroupName: !Sub "daemon-sg-${Environment}"
-      GroupDescription: "Security group for the dagster daemon"
-      VpcId: !Ref VPC
-      SecurityGroupEgress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: -1
-
-  CodeServerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    DependsOn: VPC
-    Properties:
-      GroupName: !Sub "codeserver-sg-${Environment}"
-      GroupDescription: "Security Group for the Code Server"
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 4000
-          ToPort: !Ref CodeServerPort
-          SourceSecurityGroupId: !Ref DaemonSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 4000
-          ToPort: !Ref CodeServerPort
-          SourceSecurityGroupId: !Ref DagitSecurityGroup
-      SecurityGroupEgress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: -1
-
-  DagsterTriggerOneOffSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    DependsOn: VPC
-    Properties:
-      GroupName: !Sub "dagsteroneoff-sg-${Environment}"
-      GroupDescription: "Security Group for the Lambda which triggers a Dagster job"
-      VpcId: !Ref VPC
-      SecurityGroupEgress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: -1
-
-  DagitSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    DependsOn: VPC
-    Properties:
-      GroupName: !Sub "dagit-sg-${Environment}"
-      GroupDescription: "Security Group for the Dagit Interface"
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !Ref DagitHostPort
-          ToPort: !Ref DagitHostPort
-          SourceSecurityGroupId: !Ref DagsterTriggerOneOffSecurityGroup
-      SecurityGroupEgress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: -1
-
-  DatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    DependsOn: VPC
-    Properties:
-      GroupDescription: "Security Group for the database"
-      GroupName: !Sub "database-sg-${Environment}"
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !Ref DatabasePort
-          ToPort: !Ref DatabasePort
-          SourceSecurityGroupId: !Ref DagitSecurityGroup
-        - IpProtocol: tcp
-          FromPort: !Ref DatabasePort
-          ToPort: !Ref DatabasePort
-          SourceSecurityGroupId: !Ref DaemonSecurityGroup
-        - IpProtocol: tcp
-          FromPort: !Ref DatabasePort
-          ToPort: !Ref DatabasePort
-          SourceSecurityGroupId: !Ref CodeServerSecurityGroup
-      SecurityGroupEgress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: -1
 
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -477,26 +383,6 @@ Outputs:
   PrivateSubnet2:
     Description: A reference to the private subnet in the 2nd Availability Zone
     Value: !Ref PrivateSubnet2
-
-  DagitSecurityGroup:
-    Description: Security group for Dagit
-    Value: !Ref DagitSecurityGroup
-
-  DaemonSecurityGroup:
-    Description: Security group for the Daemon
-    Value: !Ref DaemonSecurityGroup
-
-  DagsterTriggerOneOffSecurityGroup:
-    Description: Security group for the One Off Dagster Trigger Lambda
-    Value: !Ref DagsterTriggerOneOffSecurityGroup
-
-  CodeServerSecurityGroup:
-    Description: Security group for the Code Server
-    Value: !Ref CodeServerSecurityGroup
-
-  DatabaseSecurityGroup:
-    Description: Security Group for the database
-    Value: !Ref DatabaseSecurityGroup
 
   DatabaseSubnetGroup:
     Description: Subnet Group for the database

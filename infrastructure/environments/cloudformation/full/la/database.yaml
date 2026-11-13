@@ -24,14 +24,18 @@ Parameters:
     Type: String
     Default: aurora-postgresql
     Description: Type of database to run. Suggested postgres or aurora-postgresql
-  DBName:
+  DBClusterIdentifier:
     Type: String
     Default: postgres
-    Description: The name to be used for the database
+    Description: Identifier of the Aurora database cluster
   DBUsername:
     Type: String
     Default: postgres
     Description: Username to use with the database
+  DBPort:
+    Type: Number
+    Default: 3306
+    Description: Port used by the Aurora database cluster    
   DBMinCapacity:
     Type: String
     Default: 0.5
@@ -42,14 +46,28 @@ Parameters:
     Description: Minimum capacity is 0.5
 
   # Networking Parameters
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID for the shared Database
   DatabaseSubnetGroup:
     Type: String
     Description: Database Subnet Group ID
-  DatabaseSecurityGroup:
-    Type: String
-    Description: Security Group ARN to use for the Database
 
 Resources:
+
+  # Database Security Group
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupDescription: "Security Group for the database"
+      GroupName: !Sub "database-sg-${Environment}"
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
   # Database Definition
   DagsterDatabaseCluster:
     Type: 'AWS::RDS::DBCluster'
@@ -58,7 +76,8 @@ Resources:
     Properties:
       DeletionProtection: true
       Engine: !Ref DBEngine
-      DBClusterIdentifier: !Ref DBName
+      Port: !Ref DBPort
+      DBClusterIdentifier: !Ref DBClusterIdentifier
       BackupRetentionPeriod: !Ref DatabaseBackupRetentionPeriod
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPassword}:SecretString}}'
@@ -91,6 +110,8 @@ Resources:
 
   DBPassword:
     Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Name: DBPassword
       GenerateSecretString:
@@ -104,6 +125,9 @@ Resources:
         ExcludeCharacters: "\"'@/\\"
 
 Outputs:
+  DatabaseSecurityGroupId:
+    Description: Security group ID for the shared Aurora database
+    Value: !Ref DatabaseSecurityGroup
   DatabaseEndpointAddress:
     Description: Endpoint address for the Aurora database cluster
     Value: !GetAtt DagsterDatabaseCluster.Endpoint.Address
