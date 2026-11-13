@@ -163,7 +163,10 @@ Resources:
   ScheduleDagsterRunStateMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
-      StateMachineName: ScheduleDagsterRun
+      StateMachineName: !If
+        - HasEnvironment
+        - !Sub "${ProjectName}-${OrganisationName}-ScheduleDagsterRun-${Environment}"
+        - "ScheduleDagsterRun"
       RoleArn: !GetAtt ScheduleDagsterRunRole.Arn
       DefinitionString:
         Fn::Sub: |
@@ -207,7 +210,7 @@ Resources:
                 "Resource": "arn:aws:states:::aws-sdk:scheduler:createSchedule",
                 "Parameters": {
                   "Name.$": "States.Format('dagster-{}', $$.Execution.Name)",
-                  "GroupName": "${ProjectName}-${OrganisationName}-TriggerDagsterScheduleGroup",
+                  "GroupName": "${ScheduleDagsterRunScheduleGroup}",
                   "ScheduleExpression.$":
                     "States.Format('at({}T{}:00)', $.day, $.time)",
                   "ScheduleExpressionTimezone": "Europe/London",

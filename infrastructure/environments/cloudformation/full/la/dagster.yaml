@@ -80,10 +80,6 @@ Parameters:
     Type: String
     Default: "FARGATE"
     Description: Either FARGATE or EC2 type can be used
-  HealthCheckGracePeriodSeconds:
-    Type: String
-    Default: 30
-    Description: ??
   CodeServerPipelineFolder:
     Type: String
     Default: "pipeline"
@@ -175,18 +171,11 @@ Parameters:
   PrivateSubnet2:
     Type: String
     Description: ARN for private subnet 2
-  PublicSubnet1:
-    Type: String
-    Description: ARN for public subnet 1
-  PublicSubnet2:
-    Type: String
-    Description: ARN for public subnet 2
   ServiceDiscoveryNamespaceArn:
     Type: String
     Description: ARN of the Cloud Map namespace
 
 Conditions:
-  IsProd: !Equals [!Ref Environment, "prod"]
   HasEnvironment: !Not [!Equals [!Ref Environment, ""]]
 
 Resources:
@@ -248,7 +237,7 @@ Resources:
   DagitSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GrouGroupName: !If
+      GroupName: !If
         - HasEnvironment
         - !Sub "dagit-sg-${Environment}"
         - "dagit-sg"
@@ -595,10 +584,6 @@ Resources:
 
   DagsterDaemonTaskDefinition:
     Type: AWS::ECS::TaskDefinition
-    DependsOn:
-      - DaemonTaskExecutionRole
-      - DaemonTaskRole
-      - DaemonLogGroup
     Properties:
       Family: !If
         - HasEnvironment
@@ -655,10 +640,6 @@ Resources:
           Value: !Ref Environment
 
   DagitTaskDefinition:
-    DependsOn:
-      - DagitTaskExecutionRole
-      - DagitTaskRole
-      - DagitLogGroup
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !If
@@ -721,10 +702,6 @@ Resources:
 
   CodeServerTaskDefinition:
     Type: AWS::ECS::TaskDefinition
-    DependsOn:
-      - CodeServerTaskExecutionRole
-      - CodeServerTaskRole
-      - CodeServerLogGroup
     Properties:
       Family: !If
         - HasEnvironment
@@ -810,7 +787,6 @@ Resources:
 
   DagsterDaemonService:
     Type: AWS::ECS::Service
-    DependsOn: [ DagsterCluster, DagsterDaemonTaskDefinition ]
     Properties:
       Cluster: !Ref DagsterCluster
       DesiredCount: 1
@@ -834,7 +810,6 @@ Resources:
 
   DagitService:
     Type: AWS::ECS::Service
-    DependsOn: [ DagsterCluster, DagitTaskDefinition ]
     Properties:
       Cluster: !Ref DagsterCluster
       DesiredCount: 0
@@ -861,7 +836,6 @@ Resources:
 
   CodeServerService:
     Type: AWS::ECS::Service
-    DependsOn: [ DagsterCluster, CodeServerTaskDefinition ]
     Properties:
       Cluster: !Ref DagsterCluster
       DesiredCount: 1

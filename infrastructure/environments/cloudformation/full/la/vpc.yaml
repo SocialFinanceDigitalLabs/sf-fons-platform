@@ -34,16 +34,6 @@ Parameters:
     Type: String
     Default: 10.192.21.0/24
 
-  DagitHostPort:
-    Type: String
-    Default: "3000"
-    Description: Port the dagit Instance is hosted
-
-  CodeServerPort:
-    Type: String
-    Default: "4000"
-    Description: Port the code server is running on.
-
   DatabaseSubnetCIDR1:
     Type: String
     Default: 10.192.30.0/24
@@ -53,11 +43,6 @@ Parameters:
     Type: String
     Default: 10.192.31.0/24
     Description: CIDR Block for the database subnet
-
-  DatabasePort:
-    Type: String
-    Default: 3306
-    Description: Port to connect to the database
 
   DataStoreBucket:
     Type: String
@@ -220,7 +205,6 @@ Resources:
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
-    DependsOn: PrivateRouteTable1
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
