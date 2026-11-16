@@ -171,6 +171,9 @@ Parameters:
   PrivateSubnet2:
     Type: String
     Description: ARN for private subnet 2
+  ServiceDiscoveryNamespaceId:
+    Type: String
+    Description: ID of the Cloud Map namespace
   ServiceDiscoveryNamespaceArn:
     Type: String
     Description: ARN of the Cloud Map namespace
@@ -187,7 +190,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       Name: dagster-webserver
-      NamespaceId: !Ref ServiceDiscoveryNamespaceArn 
+      NamespaceId: !Ref ServiceDiscoveryNamespaceId 
       DnsConfig:
         DnsRecords:
           - Type: A
