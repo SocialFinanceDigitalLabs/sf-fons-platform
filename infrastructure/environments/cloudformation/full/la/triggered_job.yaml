@@ -37,6 +37,9 @@ Parameters:
   DagitSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
     Description: Security group ID for the Dagster webserver
+  DagsterTriggerSecurityGroupName:
+    Type: String
+    Description: Base name of the security group for the Dagster trigger Lambda
   Environment:
     Type: String
     Default: ""
@@ -251,10 +254,10 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !If
-        - HasEnvironment
-        - !Sub "dagsteroneoff-sg-${Environment}"
-        - "dagsteroneoff-sg"
-      GroupDescription: "Security Group for the Lambda which triggers a Dagster job"
+      - HasEnvironment
+      - !Sub "${DagsterTriggerSecurityGroupName}-${Environment}"
+      - !Ref DagsterTriggerSecurityGroupName
+      GroupDescription: "Security Group for the Lambda which triggers on Dagster job"
       VpcId: !Ref VpcId
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
