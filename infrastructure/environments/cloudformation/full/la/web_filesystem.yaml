@@ -1,0 +1,494 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: ECS Fargate web filesystem.
+
+Parameters:
+
+  ImageUri:
+    Type: String
+    Description: ECR image URI including digest.
+
+  Environment:
+    Type: String
+    Default: staging
+    AllowedValues: [ "dev", "staging" ]
+    Description: Environment name.
+
+  ProjectName:
+    Type: String
+    Default: fons
+    Description: Project/application name used in resource naming.
+
+  ApplicationName:
+    Type: String
+    Default: web-filesystem
+    AllowedValues:
+      - web-filesystem
+    Description: Application name used in resource naming.
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: LA VPC ID from the VPC stack
+
+  WebFilesystemPublicSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Web filesystem public subnet in AZ1 from the VPC stack.
+
+  WebFilesystemPublicSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Web filesystem public subnet in AZ2 from the VPC stack.
+
+  WebFilesystemPrivateSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Web filesystem private subnet in AZ1 from the VPC stack.
+
+  WebFilesystemPrivateSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Web filesystem private subnet in AZ2 from the VPC stack.
+
+  ContainerPort:
+    Type: Number
+    Default: 8000
+    Description: Port exposed by the container.
+
+  ContainerCpu:
+    Type: String
+    Default: "256"
+    Description: ECS task CPU units.
+
+  ContainerMemory:
+    Type: String
+    Default: "512"
+    Description: ECS task memory in MB.
+
+  DesiredCount:
+    Type: Number
+    Default: 1
+    Description: Number of ECS tasks to run.
+
+  HealthCheckPath:
+    Type: String
+    Default: /health/
+    Description: Health check path served by the container.
+
+  WebDatabaseSecretArn:
+    Type: String
+    Description: Aurora web database secret ARN.
+
+  WebsiteUrl:
+    Type: String
+    Description: Public website hostname without https://.
+
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN for the HTTPS listener.
+
+  WebDatabaseSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Aurora database security group.
+
+  WebDatabasePort:
+    Type: Number
+    Default: 3306
+    Description: Database port used by the optional security group rule.
+
+  CognitoAppClientId:
+    Type: String
+    Description: Cognito app client ID.
+
+  CognitoAppDomain:
+    Type: String
+    Description: Cognito domain prefix.
+
+  DataStoreStackName:
+    Type: String
+    Description: CloudFormation stack containing the data store bucket.
+
+  Debug:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable Django debug mode.
+
+  WriteOnlyView:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable write-only mode for the Django application.
+
+  MaxUploadSize:
+    Type: Number
+    Default: 5242880
+    Description: Django in-memory upload threshold in bytes.
+
+  AllowedDatasets:
+    Type: String
+    Default: "ssda903,cin,annex_a,pnw_census,sen2,csww,cans,school_census,placements_standard"
+    Description: Comma-separated list of allowed datasets.
+
+  PipelinesWithYearValidation:
+    Type: String
+    Default: "sen2,csww,ssda903,cin"
+    Description: Comma-separated datasets requiring year validation.
+
+  DjangoEnv:
+    Type: String
+    Default: "production"
+    AllowedValues: ["production", "development"]
+    Description: Django settings environment.
+
+  SentryDsn:
+    Type: String
+    Description: Sentry project DSN.
+
+Resources:
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public ALB security group.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - Description: HTTP from internet.
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - Description: Allow outbound to app tasks.
+          IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-${ApplicationName}-alb-sg"
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ECS task security group. Only ALB may call the container port.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - Description: App traffic from ALB only.
+          IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      SecurityGroupEgress:
+        - Description: Outbound access.
+          IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-${ApplicationName}-app-sg"
+
+  WebDatabaseIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref WebDatabaseSecurityGroupId
+      IpProtocol: tcp
+      FromPort: !Ref WebDatabasePort
+      ToPort: !Ref WebDatabasePort
+      SourceSecurityGroupId: !Ref AppSecurityGroup
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-${ApplicationName}-alb"
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Subnets:
+        - !Ref WebFilesystemPublicSubnet1
+        - !Ref WebFilesystemPublicSubnet2
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: "180"
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  AppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-${ApplicationName}-tg"
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: !Ref ContainerPort
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            Host: "#{host}"
+            Path: "/#{path}"
+            Query: "#{query}"
+            StatusCode: HTTP_301
+
+  HttpsIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AlbSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: 0.0.0.0/0
+
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn:
+      - HttpsIngress
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AppTargetGroup
+
+  DjangoSecretKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${ProjectName}/${Environment}/${ApplicationName}/django-secret-key"
+      GenerateSecretString:
+        PasswordLength: 64
+        
+  AppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${ProjectName}/${Environment}/${ApplicationName}"
+      RetentionInDays: 7
+
+  AppTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: ECS task execution role for image pulls and logs.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+          - PolicyName: WebDatabaseSecret
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - secretsmanager:GetSecretValue
+                  Resource: !Ref WebDatabaseSecretArn
+          - PolicyName: DjangoSecretKey
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - secretsmanager:GetSecretValue
+                  Resource: !Ref DjangoSecretKeySecret
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${ProjectName}-${Environment}-${ApplicationName}-cluster"
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  AppTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: ECS task role for web filesystem S3 access.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DataStoreAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  Fn::Join:
+                    - ""
+                    - - !Sub "arn:${AWS::Partition}:s3:::"
+                      - Fn::GetStackOutput:
+                          StackName: !Ref DataStoreStackName
+                          OutputName: IngressBucketName
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:GetObjectAttributes
+                Resource:
+                  Fn::Join:
+                    - ""
+                    - - !Sub "arn:${AWS::Partition}:s3:::"
+                      - Fn::GetStackOutput:
+                          StackName: !Ref DataStoreStackName
+                          OutputName: IngressBucketName
+                      - "/*"
+
+  AppTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${ProjectName}-${Environment}-${ApplicationName}"
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      TaskRoleArn: !GetAtt AppTaskRole.Arn
+      ExecutionRoleArn: !GetAtt AppTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: web
+          Image: !Ref ImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              Protocol: tcp
+          Environment:
+            - Name: PGSSLMODE
+              Value: require
+            - Name: GUNICORN_CMD_ARGS
+              Value: "--timeout 120"
+            - Name: LOAD_BALANCER_SSL
+              Value: "true"
+            - Name: ALLOWED_HOSTS
+              Value: !Ref WebsiteUrl
+            - Name: TRUSTED_ORIGINS
+              Value: !Sub "https://${WebsiteUrl}"
+            - Name: USE_SSO
+              Value: "true"
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: AWS_COGNITO_DOMAIN
+              Value: !Ref CognitoAppDomain
+            - Name: AWS_COGNITO_APP_CLIENT_ID
+              Value: !Ref CognitoAppClientId
+            - Name: SF_FS_BACKEND_URL
+              Value:
+                Fn::Join:
+                  - ""
+                  - - "s3://"
+                    - Fn::GetStackOutput:
+                        StackName: !Ref DataStoreStackName
+                        OutputName: IngressBucketName
+                    - "/"
+            - Name: DEBUG
+              Value: !Ref Debug
+            - Name: WRITE_ONLY_VIEW
+              Value: !Ref WriteOnlyView
+            - Name: MAX_UPLOAD_SIZE
+              Value: !Ref MaxUploadSize
+            - Name: ALLOWED_DATASETS
+              Value: !Ref AllowedDatasets
+            - Name: PIPELINES_WITH_YEAR_VALIDATION
+              Value: !Ref PipelinesWithYearValidation
+            - Name: DJANGO_ENV
+              Value: !Ref DjangoEnv
+            - Name: SENTRY_ENVIRONMENT
+              Value: !Ref Environment
+            - Name: SENTRY_DSN
+              Value: !Ref SentryDsn
+          Secrets:
+            - Name: DB_HOST
+              ValueFrom: !Sub "${WebDatabaseSecretArn}:host::"
+            - Name: DB_PORT
+              ValueFrom: !Sub "${WebDatabaseSecretArn}:port::"
+            - Name: DB_NAME
+              ValueFrom: !Sub "${WebDatabaseSecretArn}:dbname::"
+            - Name: DB_USERNAME
+              ValueFrom: !Sub "${WebDatabaseSecretArn}:username::"
+            - Name: DB_PASSWORD
+              ValueFrom: !Sub "${WebDatabaseSecretArn}:password::"
+            - Name: DJANGO_SECRET_KEY
+              ValueFrom: !Ref DjangoSecretKeySecret
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref AppLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: web-filesystem
+
+  AppService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - HttpListener
+      - HttpsListener
+    Properties:
+      ServiceName: !Sub "${ProjectName}-${Environment}-${ApplicationName}"
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref AppTaskDefinition
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      DesiredCount: !Ref DesiredCount
+      HealthCheckGracePeriodSeconds: 60
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !Ref AppSecurityGroup
+          Subnets:
+            - !Ref WebFilesystemPrivateSubnet1
+            - !Ref WebFilesystemPrivateSubnet2
+      LoadBalancers:
+        - ContainerName: web
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref AppTargetGroup
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  WebsiteUrl:
+    Value: !Sub "https://${WebsiteUrl}"
+  EcsClusterName:
+    Value: !Ref EcsCluster
+  EcsServiceName:
+    Value: !GetAtt AppService.Name
+  TaskDefinitionArn:
+    Value: !Ref AppTaskDefinition
+  CloudWatchLogGroup:
+    Value: !Ref AppLogGroup
+  LoadBalancerDnsName:
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+  HttpsListenerArn:
+    Value: !Ref HttpsListener

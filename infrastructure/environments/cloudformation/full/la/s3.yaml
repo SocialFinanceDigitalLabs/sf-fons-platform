@@ -37,6 +37,7 @@ Parameters:
 
   OrgAccountRoleArn:
     Type: String
+    Default: ""
     Description: Account Organisation role that will be allowed to access the shared storage
 
 Conditions:
@@ -298,29 +299,32 @@ Resources:
             Action: "s3:GetObject"
             Resource:
               - !Sub "${SharedBucket.Arn}/*"
-          - Effect: Allow
-            Principal:
-              AWS: !Ref OrgAccountRoleArn
-            Action:
-              - "s3:ListBucketMultipartUploads"
-              - "s3:GetObjectVersionTagging"
-              - "s3:ListBucketVersions"
-              - "s3:GetObjectAttributes"
-              - "s3:PutObjectVersionTagging"
-              - "s3:ListBucket"
-              - "s3:GetBucketAcl"
-              - "s3:GetObjectVersionAttributes"
-              - "s3:PutObject"
-              - "s3:GetObjectAcl"
-              - "s3:GetObject"
-              - "s3:GetObjectVersionAcl"
-              - "s3:GetObjectTagging"
-              - "s3:PutObjectTagging"
-              - "s3:GetBucketLocation"
-              - "s3:GetObjectVersion"
-            Resource:
-              - !Sub "${SharedBucket.Arn}/*"
-              - !GetAtt SharedBucket.Arn
+          - !If
+            - EnableCrossAccountAccessCondition
+            - Effect: Allow
+              Principal:
+                AWS: !Ref OrgAccountRoleArn
+              Action:
+                - "s3:ListBucketMultipartUploads"
+                - "s3:GetObjectVersionTagging"
+                - "s3:ListBucketVersions"
+                - "s3:GetObjectAttributes"
+                - "s3:PutObjectVersionTagging"
+                - "s3:ListBucket"
+                - "s3:GetBucketAcl"
+                - "s3:GetObjectVersionAttributes"
+                - "s3:PutObject"
+                - "s3:GetObjectAcl"
+                - "s3:GetObject"
+                - "s3:GetObjectVersionAcl"
+                - "s3:GetObjectTagging"
+                - "s3:PutObjectTagging"
+                - "s3:GetBucketLocation"
+                - "s3:GetObjectVersion"
+              Resource:
+                - !Sub "${SharedBucket.Arn}/*"
+                - !GetAtt SharedBucket.Arn
+            - !Ref AWS::NoValue
 
   ExternalDataStoreBucket:
     Type: 'AWS::S3::Bucket'
@@ -476,6 +480,7 @@ Outputs:
     Value: !GetAtt SharedBucket.Arn
     Description: Arn of the shared Amazon S3 bucket with a lifecycle configuration.
   SharedRoleARN:
+    Condition: EnableCrossAccountAccessCondition
     Value: !GetAtt SharedStorageRole.Arn
     Description: ARN of the role used to access the data store bucket
   LambdaCodeBucket:
