@@ -155,30 +155,6 @@ Resources:
     Properties:
       Domain: vpc
 
-  NatGatewayDatabaseEIP1:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
-
-  NatGatewayDatabaseEIP2:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
-
-  NatGatewayDatabase1:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatGatewayDatabaseEIP1.AllocationId
-      SubnetId: !Ref DatabaseSubnet1
-
-  NatGatewayDatabase2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatGatewayDatabaseEIP2.AllocationId
-      SubnetId: !Ref DatabaseSubnet2
-
   NatGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -400,7 +376,7 @@ Resources:
     DependsOn: VPC
     Properties:
       GroupName: !Sub "dagsteroneoff-sg-${Environment}"
-      GroupDescription: "Security Group for the Lambda which triggers a Dagster job"
+      GroupDescription: "Security Group for the Lambda which triggers on Dagster job"
       VpcId: !Ref VPC
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
